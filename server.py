@@ -21,7 +21,8 @@ bcrypt = Bcrypt()
 app.config["MYSQL_DATABASE_HOST"]	= "localhost"
 app.config["MYSQL_DATABASE_PORT"]	= 3306
 app.config["MYSQL_DATABASE_USER"]	= "root"
-app.config["MYSQL_DATABASE_PASSWORD"]	= "root"
+app.config["MYSQL_DATABASE_PASSWORD"]	= "mipassword"
+#app.config["MYSQL_DATABASE_PASSWORD"]	= "root"
 app.config["MYSQL_DATABASE_DB"] = "cuidatiacogdb"
 
 mysql.init_app(app)
@@ -338,4 +339,4 @@ def get_estadisticas():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5002)
