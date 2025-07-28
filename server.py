@@ -350,7 +350,7 @@ def obtener_actividad_reciente():
         print(e)
         return jsonify({"error": str(e)}), 500
 
-@app.route('/admin/incidencias', methods=['GET'])
+@app.route('/incidencias', methods=['GET'])
 def obtener_todas():
     try:
         incidencias = ModelIncidencias.obtener_todas(mysql)
