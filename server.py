@@ -350,6 +350,16 @@ def obtener_actividad_reciente():
         print(e)
         return jsonify({"error": str(e)}), 500
 
+@app.route('/admin/incidencias', methods=['GET'])
+def obtener_todas():
+    try:
+        incidencias = ModelIncidencias.obtener_todas(mysql)
+        print(incidencias)
+        return jsonify({"actividad": incidencias}), 200
+    except Exception as e:
+        print(e)
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/admin/actividad-reciente', methods=['GET'])
 def insertar_incidencia():
     try:
