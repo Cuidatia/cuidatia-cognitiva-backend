@@ -9,6 +9,8 @@ from models.ModelUsuarios import ModelUsuarios
 from models.ModelValoraciones import ModelValoracion
 from models.ModelNivelesJuego import ModelNivelesJuego
 from models.ModelNivelesJuegoUsuario import ModelNivelJuegoUsuario
+from models.ModelActividadUsuario import ModelActividadUsuario
+from models.ModelIncidencias import ModelIncidencias
 from flaskext.mysql import MySQL
 from werkzeug.utils import secure_filename
 import os
@@ -334,6 +336,34 @@ def get_estadisticas():
         estadisticas = ModelUsuarios.obtener_estadisticas(mysql)
         print(estadisticas)
         return jsonify({"usuarios": estadisticas}), 200
+    except Exception as e:
+        print(e)
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/actividad-reciente', methods=['GET'])
+def obtener_actividad_reciente():
+    try:
+        actividad = ModelActividadUsuario.obtener_actividad_reciente(mysql)
+        print(actividad)
+        return jsonify({"actividad": actividad}), 200
+    except Exception as e:
+        print(e)
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/actividad-reciente', methods=['GET'])
+def insertar_incidencia():
+    try:
+        data = request.json
+        nombre = data.get('nombre')
+        email = data.get('email')
+        tipo = data.get('tipo')
+        mensaje = data.get('mensaje')
+    
+        print(nombre, email, tipo, mensaje)
+        
+        actividad = ModelIncidencias.insertar_incidencia(mysql)
+        print(actividad)
+        return jsonify({"actividad": actividad}), 200
     except Exception as e:
         print(e)
         return jsonify({"error": str(e)}), 500
