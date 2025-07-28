@@ -1,6 +1,5 @@
 from flask import Flask, jsonify, request, send_from_directory, Blueprint
 
-
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_cors import cross_origin
@@ -10,8 +9,6 @@ from models.ModelUsuarios import ModelUsuarios
 from models.ModelValoraciones import ModelValoracion
 from models.ModelNivelesJuego import ModelNivelesJuego
 from models.ModelNivelesJuegoUsuario import ModelNivelJuegoUsuario
-from models.ModelIncidencias import ModelIncidencias
-from models.ModelActividadUsuario import ModelActividadUsuario
 from flaskext.mysql import MySQL
 from werkzeug.utils import secure_filename
 import os
@@ -24,8 +21,7 @@ bcrypt = Bcrypt()
 app.config["MYSQL_DATABASE_HOST"]	= "localhost"
 app.config["MYSQL_DATABASE_PORT"]	= 3306
 app.config["MYSQL_DATABASE_USER"]	= "root"
-app.config["MYSQL_DATABASE_PASSWORD"]	= "mipassword"
-#app.config["MYSQL_DATABASE_PASSWORD"]	= "root"
+app.config["MYSQL_DATABASE_PASSWORD"]	= "root"
 app.config["MYSQL_DATABASE_DB"] = "cuidatiacogdb"
 
 mysql.init_app(app)
@@ -143,6 +139,7 @@ def login():
 @app.route("/modificar", methods=["POST"])
 def modificar():
     data = request.get_json()
+    print(data)
     try:
         resultado = ModelUsuarios.update_usuario(mysql, data)
         return jsonify(resultado),200
@@ -309,6 +306,8 @@ def aumentar_nivel(juego_id):
     nivel_id = data.get('nuevo_nivel')
     usuario_id = data.get('usuario_id')
     juego_id = data.get('juego_id')
+    
+    print(juego_id, usuario_id, nivel_id)
 
     if not usuario_id or not nivel_id:
         return jsonify({'error': 'Datos incompletos'}), 400
@@ -332,84 +331,11 @@ def get_usuarios():
 def get_estadisticas():
     try:
         estadisticas = ModelUsuarios.obtener_estadisticas(mysql)
+        print(estadisticas)
         return jsonify({"usuarios": estadisticas}), 200
     except Exception as e:
         print(e)
         return jsonify({"error": str(e)}), 500
 
-@app.route('/incidencias', methods=['POST'])
-def crear_incidencia():
-    try:
-        data = request.get_json()
-        nombre = data.get("nombre")
-        email = data.get("email")
-        tipo = data.get("tipo")
-        mensaje = data.get("mensaje")
-
-        if not all([nombre, email, tipo, mensaje]):
-            return jsonify({"error": "Faltan campos requeridos"}), 400
-
-        resultado = ModelIncidencias.insertar_incidencia(mysql, nombre, email, tipo, mensaje)
-        return jsonify(resultado), 201 if 'mensaje' in resultado else 500
-    except Exception as e:
-        print("Error en crear_incidencia:", e)
-        return jsonify({"error": str(e)}), 500
-    
-@app.route('/admin/incidencias', methods=['GET'])
-def listar_incidencias():
-    try:
-        incidencias = ModelIncidencias.obtener_todas(mysql)
-        return jsonify({"incidencias": incidencias}), 200
-    except Exception as e:
-        print("Error en listar_incidencias:", e)
-        return jsonify({"error": str(e)}), 500       
- 
-@app.route('/admin/registrar-evento', methods=['POST'])
-def registrar_evento():    
-    try:
-        data = request.json
-        tipo_evento = data.get("tipo_evento")
-        descripcion = data.get("descripcion")
-        usuario_id = data.get("user")
-        usuario_email = data.get("usuario_email")
-        
-        print(tipo_evento, descripcion, usuario_email)
-
-        if not tipo_evento or not descripcion:
-            return jsonify({'error': 'Datos incompletos'}), 400
-    
-        actividades = ModelActividadUsuario.registrar_evento(mysql, usuario_id, tipo_evento, descripcion, usuario_email)
-        return jsonify({"actividades": actividades}), 200
-    except Exception as e:
-        print("Error en registrar_evento:", e)
-        return jsonify({"error": str(e)}), 500  
-
-@app.route('/admin/actividad-reciente', methods=['GET'])
-def obtener_actividad_reciente():
-    try:
-        actividades = ModelActividadUsuario.obtener_actividad_reciente(mysql)
-        return jsonify({"actividades": actividades}), 200
-    except Exception as e:
-        print("Error en obtener_actividad_reciente:", e)
-        return jsonify({"error": str(e)}), 500   
-    
-@app.route('/admin/usuarios/actividad-reciente', methods=['GET'])
-def obtener_actividad_reciente_usuario():
-    try:
-        actividades = ModelActividadUsuario.obtener_actividad_reciente_usuario(mysql)
-        return jsonify({"actividades": actividades}), 200
-    except Exception as e:
-        print("Error en obtener_actividad_reciente:", e)
-        return jsonify({"error": str(e)}), 500
-    
-@app.route('/mas-jugados', methods=['GET'])
-def juegos_mas_jugados():
-    try:
-        juegos = ModelJuegos.obtener_juegos_mas_jugados(mysql)
-        return jsonify({"juegos": juegos}), 200
-    except Exception as e:
-        print("Error en obtener_actividad_reciente:", e)
-        return jsonify({"error": str(e)}), 500  
-    
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5002)
+    app.run(debug=True)

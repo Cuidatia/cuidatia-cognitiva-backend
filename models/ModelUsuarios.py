@@ -29,6 +29,7 @@ class ModelUsuarios:
             con.commit()
             return {"mensaje": "Usuario registrado correctamente"}
         except Exception as e:
+            print(e)
             return {"error": str(e)}
 
     @classmethod
@@ -67,6 +68,7 @@ class ModelUsuarios:
             con.commit()
             return {"mensaje": "Usuario actualizado correctamente"}
         except Exception as e:
+            print(e)
             return {"error": str(e)} 
     
     @classmethod
@@ -102,6 +104,7 @@ class ModelUsuarios:
             return nueva_experiencia
 
         except Exception as e:
+            print(e)
             return False
         finally:
             cursor.close()
@@ -151,7 +154,7 @@ class ModelUsuarios:
             cursor.execute("""SELECT nombre, numero_jugadas FROM juegos ORDER BY numero_jugadas DESC LIMIT 5""")
             juegos_populares = cursor.fetchall()
 
-            cursor.execute("""SELECT DATE(fecha_registro) as fecha, COUNT(*) FROM usuarios GROUP BY fecha ORDER BY fecha ASC""")
+            cursor.execute("""SELECT DATE(fecha_registro) as fecha, COUNT(*) FROM usuarios GROUP BY fecha ORDER BY fecha DESC LIMIT 7""")
             registros_por_dia = cursor.fetchall()
 
             return ({
@@ -164,7 +167,7 @@ class ModelUsuarios:
 
         except Exception as e:
             import traceback
-            # print(traceback.format_exc())
+            print(traceback.format_exc())
             return jsonify({"error": str(e)}), 500
 
         
