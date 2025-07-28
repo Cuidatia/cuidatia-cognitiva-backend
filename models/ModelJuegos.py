@@ -67,7 +67,6 @@ class ModelJuegos:
                 WHERE juego_id = %s
             """, (juego_id,))
             valoracion = cursor.fetchone()
-            print(valoracion)
 
             return {
                 "puntuacion_promedia": float(valoracion[0]) if valoracion[0] else 0,
@@ -98,3 +97,36 @@ class ModelJuegos:
         finally:
             cursor.close()
             con.close()
+            
+    @classmethod        
+    def obtener_juegos_mas_jugados(cls, mysql):
+        con = mysql.connect()
+        cursor = con.cursor()
+        try:
+            
+            cursor.execute("""
+                SELECT id, nombre, descripcion, imagen, icono, categoria, numero_jugadas
+                FROM juegos
+                ORDER BY numero_jugadas DESC
+                LIMIT 4
+            """)
+            
+            juegos = cursor.fetchall()
+            cursor.close()
+
+            juegos_lista = []
+            for juego in juegos:
+                juegos_lista.append({
+                    "id": juego[0],
+                    "nombre": juego[1],
+                    "descripcion": juego[2],
+                    "imagen": juego[3],
+                    "icono": juego[4],  # URL o nombre del ícono
+                    "categoria": juego[5],
+                    "numero_jugadas": juego[6],
+                })
+
+            return juegos_lista
+        except Exception as e:
+            print("Error al obtener juegos más jugados:", e)
+            return []
