@@ -371,7 +371,7 @@ def insertar_incidencia():
     
         print(nombre, email, tipo, mensaje)
         
-        actividad = ModelIncidencias.insertar_incidencia(mysql)
+        actividad = ModelIncidencias.insertar_incidencia(mysql, nombre, email, tipo, mensaje)
         print(actividad)
         return jsonify({"actividad": actividad}), 200
     except Exception as e:
