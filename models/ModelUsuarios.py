@@ -1,5 +1,6 @@
 from flask import request, jsonify
 from entities.Usuarios import Usuario, hash_password, check_password
+from datetime import datetime, timedelta
 
 class ModelUsuarios:
     @classmethod
@@ -121,10 +122,10 @@ class ModelUsuarios:
             """)
             rows = cursor.fetchall()
             usuarios = []
-            for juego in rows:
+            for usuario in rows:
                 usuarios_dict = Usuario(
-                    juego[0], juego[1], juego[2], juego[3].strftime('%Y-%m-%d'), juego[4], juego[5].strftime('%Y-%m-%d'),
-                    juego[6], juego[7], juego[8], juego[9], juego[10], juego[11]).to_dict()
+                    usuario[0], usuario[1], usuario[2], usuario[3].strftime('%Y-%m-%d'), usuario[4], usuario[5].strftime('%Y-%m-%d'),
+                    usuario[6], usuario[7], usuario[8], usuario[9], usuario[10], usuario[11]).to_dict()
                 
                 usuarios.append(usuarios_dict)
                 
@@ -135,7 +136,6 @@ class ModelUsuarios:
         finally:
             cursor.close()
             con.close()
-            
             
     @staticmethod
     def obtener_estadisticas(mysql):
@@ -151,18 +151,19 @@ class ModelUsuarios:
             cursor.execute("""SELECT COUNT(*) FROM juegos""")
             total_juegos = cursor.fetchone()[0]
 
-            cursor.execute("""SELECT nombre, numero_jugadas FROM juegos ORDER BY numero_jugadas DESC LIMIT 5""")
-            juegos_populares = cursor.fetchall()
+            # --- Totales
+            cursor.execute("""SELECT COUNT(*) FROM incidencias""")
+            total_incidencias = cursor.fetchone()[0]
 
-            cursor.execute("""SELECT DATE(fecha_registro) as fecha, COUNT(*) FROM usuarios GROUP BY fecha ORDER BY fecha DESC LIMIT 7""")
-            registros_por_dia = cursor.fetchall()
+            cursor.execute("""SELECT COUNT(*) FROM actividad_usuario""")
+            total_actividades = cursor.fetchone()[0]
 
             return ({
                 "usuarios_activos": usuarios_activos,
                 "total_usuarios": total_usuarios,
                 "total_juegos": total_juegos,
-                "juegos_populares": [{"nombre": j[0], "jugadas": j[1]} for j in juegos_populares],
-                "registros_por_dia": [{"fecha": str(r[0]), "cantidad": r[1]} for r in registros_por_dia]
+                "total_incidencias": total_incidencias,
+                "total_actividades": total_actividades
             })
 
         except Exception as e:
@@ -173,10 +174,93 @@ class ModelUsuarios:
         
         finally:
             cursor.close()
+            con.close() 
+            
+    @staticmethod
+    def obtener_graficas(mysql, filtro='7d'):
+        con = mysql.connect()
+        cursor = con.cursor()
+        try:
+            # --- Rango de fechas
+            hoy = datetime.now().date()
+            if filtro == '7d':
+                desde = hoy - timedelta(days=6)
+            elif filtro == '30d':
+                desde = hoy - timedelta(days=29)
+            else:
+                desde = None  # global
+
+            cursor.execute("""SELECT nombre, numero_jugadas FROM juegos ORDER BY numero_jugadas DESC LIMIT 5""")
+            juegos_populares = cursor.fetchall()
+
+            # --- Registros por día
+            if desde:
+                cursor.execute("""
+                    SELECT DATE(fecha_registro) as fecha, COUNT(*) 
+                    FROM usuarios 
+                    WHERE fecha_registro >= %s
+                    GROUP BY fecha ORDER BY fecha ASC
+                """, (desde,))
+                registros_raw = cursor.fetchall()
+            else:
+                cursor.execute("""
+                    SELECT DATE(fecha_registro) as fecha, COUNT(*) 
+                    FROM usuarios 
+                    GROUP BY fecha ORDER BY fecha ASC
+                """)
+                registros_raw = cursor.fetchall()
+
+            # --- Actividad por día
+            if desde:
+                cursor.execute("""
+                    SELECT DATE(fecha) as groupfecha, COUNT(*) 
+                    FROM actividad_usuario 
+                    WHERE fecha >= %s
+                    GROUP BY groupfecha ORDER BY groupfecha ASC
+                """, (desde,))
+                actividades_raw = cursor.fetchall()
+            else:
+                cursor.execute("""
+                    SELECT DATE(fecha) as groupfecha, COUNT(*) 
+                    FROM actividad_usuario 
+                    GROUP BY groupfecha ORDER BY groupfecha ASC
+                """)
+                actividades_raw = cursor.fetchall()
+
+            # --- Rellenar días vacíos
+            def rellenar_dias(desde, hasta, datos_raw):
+                fechas_existentes = {str(r[0]): r[1] for r in datos_raw}
+                return [
+                    {"fecha": str((desde + timedelta(days=i))), "cantidad": fechas_existentes.get(str(desde + timedelta(days=i)), 0)}
+                    for i in range((hasta - desde).days + 1)
+                ]
+
+            if desde:
+                hasta = hoy
+                registros_por_dia = rellenar_dias(desde, hasta, registros_raw)
+                actividades_por_dia = rellenar_dias(desde, hasta, actividades_raw)
+            else:
+                registros_por_dia = [{"fecha": str(r[0]), "cantidad": r[1]} for r in registros_raw]
+                actividades_por_dia = [{"fecha": str(r[0]), "cantidad": r[1]} for r in actividades_raw]
+
+
+            return ({
+                "actividades_por_dia": actividades_por_dia,
+                "juegos_populares": [{"nombre": j[0], "jugadas": j[1]} for j in juegos_populares],
+                "registros_por_dia": registros_por_dia
+            })
+
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            return jsonify({"error": str(e)}), 500
+
+        finally:
+            cursor.close()
             con.close()        
             
     @staticmethod
-    def obtener_usuario_por_id(mysql, data):
+    def obtener_usuario_por_id(mysql, data): 
         con = mysql.connect()
         cursor = con.cursor()
         try:

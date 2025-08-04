@@ -2,20 +2,20 @@ from entities.ActividadUsuario import Actividad
 class ModelActividadUsuario:
 
     @classmethod
-    def registrar_evento(cls, mysql, usuario_id, tipo_evento, descripcion, usuario_email):
+    def registrar_evento(cls, mysql, usuario_id, tipo_evento, descripcion): #, usuario_correo
         con = mysql.connect()
         cursor = con.cursor()
         try:
-            cursor.execute("""
-                SELECT id FROM usuarios WHERE correo = %s"""
-            , (usuario_email,))
+            # cursor.execute("""
+            #     SELECT id FROM usuarios WHERE correo = %s"""
+            # , (usuario_correo,))
             
-            usuario = cursor.fetchone()
+            # usuario = cursor.fetchone()
             
-            if not usuario:
-                return {"error": "Usuario no encontrado"}, 404
+            # if not usuario:
+            #     return {"error": "Usuario no encontrado"}, 404
 
-            usuario_id = usuario[0]
+            # usuario_id = usuario[0]
             
             cursor.execute("""
                 INSERT INTO actividad_usuario (usuario_id, tipo_evento, descripcion, fecha)
@@ -66,6 +66,32 @@ class ModelActividadUsuario:
         finally:
             cursor.close()
             con.close()
+      
+    @classmethod
+    def obtener_por_usuario(cls, mysql, usuario_id):
+        con = mysql.connect()
+        cursor = con.cursor()
+        try:
+            cursor.execute("""
+                SELECT tipo_evento, descripcion, fecha
+                FROM actividad_usuario
+                WHERE usuario_id = %s
+                ORDER BY fecha DESC
+            """, (usuario_id,))
+            rows = cursor.fetchall()
+            actividades = []
+            for row in rows:
+                fecha_formateada = row[2].strftime('%Y-%m-%d %H:%M') if row[2] else None
+                actividad = {
+                    "tipo_evento": row[0],
+                    "descripcion": row[1],
+                    "fecha": fecha_formateada,
+                } 
+                actividades.append(actividad)
+            return actividades
+        except Exception as e:
+            print("Error al obtener actividad del usuario:", e)
+            return []
             
     # @classmethod
     # def obtener_actividad_reciente_usuario(cls, mysql):

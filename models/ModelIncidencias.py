@@ -8,8 +8,8 @@ class ModelIncidencias:
         cursor = con.cursor()
         try:
             cursor.execute("""
-                INSERT INTO incidencias (nombre, email, tipo, mensaje)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO incidencias (nombre, email, tipo, mensaje, fecha)
+                VALUES (%s, %s, %s, %s, NOW())
             """, (nombre, email, tipo, mensaje))
             con.commit()
             return {'mensaje': 'Incidencia registrada correctamente'}
@@ -32,8 +32,9 @@ class ModelIncidencias:
             rows = cursor.fetchall()
             incidencias = []
             for incidencia in rows:
+                fecha_formateada = incidencia[5].strftime('%Y-%m-%d %H:%M') if incidencia[5] else None
                 incidencias_dict = Incidencia(
-                    incidencia[0], incidencia[1], incidencia[2], incidencia[3], incidencia[4], incidencia[5].strftime('%Y-%m-%d'), incidencia[6]).to_dict()
+                    incidencia[0], incidencia[1], incidencia[2], incidencia[3], incidencia[4], fecha_formateada, incidencia[6]).to_dict()
                 
                 incidencias.append(incidencias_dict)
                 

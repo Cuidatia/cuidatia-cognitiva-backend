@@ -2,7 +2,7 @@ import mysql.connector
 from config.db_config import DB_CONFIG # Asegúrate de que la ruta sea correcta
 
 class Juego:
-    def __init__(self, id, nombre, descripcion, imagen, icono, categoria, numero_jugadas, es_destacado):
+    def __init__(self, id, nombre, descripcion, imagen, icono, categoria, numero_jugadas, es_destacado, bloqueado):
         self.id = id
         self.nombre = nombre
         self.descripcion = descripcion
@@ -11,6 +11,7 @@ class Juego:
         self.categoria = categoria
         self.numero_jugadas = numero_jugadas
         self.es_destacado = es_destacado
+        self.bloqueado = bloqueado
 
     def to_dict(self):
         """Convierte el objeto Juego a un diccionario para fácil serialización (ej. a JSON)."""
@@ -22,7 +23,8 @@ class Juego:
             "icono": self.icono,
             "categoria": self.categoria,
             "numero_jugadas": self.numero_jugadas,
-            "es_destacado": self.es_destacado
+            "es_destacado": self.es_destacado,
+            "bloqueado": self.bloqueado
         }
 
 def get_db_connection():

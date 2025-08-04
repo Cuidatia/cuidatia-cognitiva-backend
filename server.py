@@ -1,8 +1,7 @@
-from flask import Flask, jsonify, request, send_from_directory, Blueprint
+from flask import Flask, jsonify, session, request, send_from_directory, Blueprint
 
-from flask_cors import CORS
 from flask_bcrypt import Bcrypt
-from flask_cors import cross_origin
+from flask_cors import CORS, cross_origin
 import mysql.connector
 from models.ModelJuegos import ModelJuegos
 from models.ModelUsuarios import ModelUsuarios
@@ -135,14 +134,17 @@ def registro():
 def login():
     data = request.get_json()
     resultado = ModelUsuarios.login_usuario(mysql, data)
-    return jsonify(resultado)
+    # ✅ Si contiene error, devolver 401
+    if "error" in resultado:
+        return jsonify(resultado), 401  # <- MUY IMPORTANTE
 
+    # ✅ Si todo bien, devolver 200 OK
+    return jsonify(resultado), 200
 ## MODIFICAR DATOS USAURIOS PERFIL
 
 @app.route("/modificar", methods=["POST"])
 def modificar():
     data = request.get_json()
-    print(data)
     try:
         resultado = ModelUsuarios.update_usuario(mysql, data)
         return jsonify(resultado),200
@@ -309,8 +311,6 @@ def aumentar_nivel(juego_id):
     nivel_id = data.get('nuevo_nivel')
     usuario_id = data.get('usuario_id')
     juego_id = data.get('juego_id')
-    
-    print(juego_id, usuario_id, nivel_id)
 
     if not usuario_id or not nivel_id:
         return jsonify({'error': 'Datos incompletos'}), 400
@@ -334,8 +334,17 @@ def get_usuarios():
 def get_estadisticas():
     try:
         estadisticas = ModelUsuarios.obtener_estadisticas(mysql)
-        print(estadisticas)
         return jsonify({"usuarios": estadisticas}), 200
+    except Exception as e:
+        print(e)
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/admin/graficas', methods=['GET'])
+def get_graficas():
+    try:
+        filtro = request.args.get('filtro', '7d')
+        graficas = ModelUsuarios.obtener_graficas(mysql, filtro)
+        return jsonify({"graficas": graficas}), 200
     except Exception as e:
         print(e)
         return jsonify({"error": str(e)}), 500
@@ -344,7 +353,6 @@ def get_estadisticas():
 def obtener_actividad_reciente():
     try:
         actividad = ModelActividadUsuario.obtener_actividad_reciente(mysql)
-        print(actividad)
         return jsonify({"actividad": actividad}), 200
     except Exception as e:
         print(e)
@@ -354,11 +362,44 @@ def obtener_actividad_reciente():
 def obtener_todas():
     try:
         incidencias = ModelIncidencias.obtener_todas(mysql)
-        print(incidencias)
         return jsonify({"incidencias": incidencias}), 200
     except Exception as e:
         print(e)
         return jsonify({"error": str(e)}), 500
+    
+@app.route("/admin/registrar-evento", methods=["POST"])
+def registrar_evento():
+    try:
+        data = request.get_json()
+        tipo_evento = data.get("tipo_evento")
+        descripcion = data.get("descripcion")
+        #usuario_correo = data.get("usuario_correo")
+        user = data.get("user")
+        
+        print(data)
+
+        if not tipo_evento or not descripcion or not user: #or not usuario_correo
+            return jsonify({"error": "Faltan campos requeridos"}), 400
+
+        resultado = ModelActividadUsuario.registrar_evento(mysql, user, tipo_evento, descripcion) #, usuario_correo
+
+        if "error" in resultado:
+            return jsonify(resultado), 400
+
+        return jsonify(resultado), 200
+
+    except Exception as e:
+        print("Error en /admin/registrar-evento:", e)
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/mas-jugados', methods=['GET'])
+def obtener_juegos_mas_jugados():
+    try:
+        juegos = ModelJuegos.obtener_mas_jugados(mysql)
+        return jsonify({"juegos": juegos}), 200
+    except Exception as e:
+        print("Error al obtener juegos más jugados:", e)
+        return jsonify({"error": "Error al obtener los juegos más jugados"}), 500
 
 @app.route('/incidencias', methods=['POST'])
 def insertar_incidencia():
@@ -368,15 +409,91 @@ def insertar_incidencia():
         email = data.get('email')
         tipo = data.get('tipo')
         mensaje = data.get('mensaje')
-    
-        print(nombre, email, tipo, mensaje)
         
         actividad = ModelIncidencias.insertar_incidencia(mysql, nombre, email, tipo, mensaje)
-        print(actividad)
         return jsonify({"actividad": actividad}), 200
     except Exception as e:
         print(e)
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/valoraciones/eliminar', methods=['POST'])
+def eliminar_valoracion():
+    data = request.get_json()
+    juego_id = data.get('juego_id')
+    usuario_id = data.get('usuario_id')
+
+    if not juego_id or not usuario_id:
+        return jsonify({"error": "Faltan parámetros"}), 400
+
+    try:
+        resultado = ModelValoracion.eliminar_valoracion(mysql, juego_id, usuario_id)
+        if resultado:
+            return jsonify({"mensaje": "Reseña eliminada correctamente"}), 200
+        else:
+            return jsonify({"mensaje": "No se encontró reseña para eliminar"}), 404
+    except Exception as e:
+        print("Error al eliminar valoración:", e)
+        return jsonify({"error": "Error al eliminar valoración"}), 500
+
+@app.route('/usuario/actividad', methods=['GET'])
+def obtener_actividad_usuario():
+    usuario_id = request.args.get('usuario_id')  # Lo pasas en la URL, ej: /usuario/actividad?usuario_id=123
+
+    if not usuario_id:
+        return jsonify({'error': 'Falta usuario_id'}), 400
+
+    try:
+        actividad = ModelActividadUsuario.obtener_por_usuario(mysql, usuario_id)
+        return jsonify(actividad), 200
+    except Exception as e:
+        print("Error al cargar registros:", e)
+        return jsonify({"error": "Error al cargar registros"}), 500
+
+@app.route('/juegos/todos', methods=['GET'])
+def obtener_todos_los_juegos():
+    try:
+        juegos = ModelJuegos.obtener_todos(mysql)
+        return jsonify({'juegos': juegos}), 200
+    except Exception as e:
+        print("Error al obtener juegos:", e)
+        return jsonify({'error': 'Error interno'}), 500
+    
+@app.route('/admin/bloquear-juego', methods=['POST'])
+def bloquear_juego():
+    data = request.get_json()
+    juego_id = data.get('juego_id')
+    bloquear = data.get('bloquear')
+
+    if juego_id is None or bloquear is None:
+        return jsonify({'error': 'Faltan datos'}), 400
+
+    try:
+        resultado = ModelJuegos.bloquear_juego(mysql, juego_id, bloquear)
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        print("Error al bloquear juego:", e)
+        return jsonify({'error': 'Error interno'}), 500
+
+
+# @app.route('/admin/crear-invitacion', methods=['POST'])
+# def crear_invitacion():
+#     data = request.get_json()
+#     rol = data.get('rol')
+
+#     if rol not in [3, 4]:
+#         return jsonify({'error': 'Rol no permitido'}), 400
+
+#     try:
+#         import secrets
+#         token = secrets.token_urlsafe(16)
+
+#         # Guarda el token con el rol asociado (en tabla invitaciones)
+#         resultado = ModelInvitaciones.guardar_invitacion(mysql, token, rol)
+#         return jsonify({'token': token}), 200
+#     except Exception as e:
+#         print("Error al crear invitación:", e)
+#         return jsonify({'error': 'Error interno'}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5002)
+    #app.run(debug=True, host='127.0.0.1', port=5002)

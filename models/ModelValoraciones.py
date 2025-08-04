@@ -32,6 +32,20 @@ class ModelValoracion:
             return {"error": str(e)}
 
     @classmethod
+    def eliminar_valoracion(cls, mysql, juego_id, usuario_id):
+        con = mysql.connect()
+        cursor = con.cursor()
+        try:
+            cursor.execute("""
+                DELETE FROM valoraciones WHERE juego_id = %s 
+                AND usuario_id = %s""", (juego_id, usuario_id))
+            con.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            print("Error en eliminar_valoracion:", e)
+            return False
+    
+    @classmethod
     def editar_valoracion(cls, mysql, data):
         con = mysql.connect()
         cursor = con.cursor()

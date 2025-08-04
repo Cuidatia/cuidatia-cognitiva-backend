@@ -10,7 +10,7 @@ class ModelJuegos:
         try:
             cursor.execute(""" 
 
-                select * from juegos;
+                select * from juegos WHERE bloqueado = 0;
 
             """)
 
@@ -19,7 +19,7 @@ class ModelJuegos:
             juegos = []
             for juego in rows:
                 juego_dict = Juego(
-                    juego[0], juego[1], juego[2], juego[3], juego[4], juego[5], juego[6], juego[7]
+                    juego[0], juego[1], juego[2], juego[3], juego[4], juego[5], juego[6], juego[7], juego[8]
                 ).to_dict()
 
                 # Obtener puntuación promedio y número de valoraciones
@@ -95,6 +95,81 @@ class ModelJuegos:
         except Exception as e:
             print("Error en incrementar_jugadas:", e)
             return {'error': str(e)}
+        finally:
+            cursor.close()
+            con.close()
+            
+    @staticmethod
+    def obtener_mas_jugados(mysql, limite=4):
+        con = mysql.connect()
+        cursor = con.cursor()
+        try:
+            cursor.execute("""
+                SELECT id, nombre, imagen, descripcion, categoria, numero_jugadas, icono
+                FROM juegos
+                ORDER BY numero_jugadas DESC
+                LIMIT %s
+            """, (limite,))
+            resultados = cursor.fetchall()
+            juegos = []
+            for row in resultados:
+                juegos.append({
+                    "id": row[0],
+                    "nombre": row[1],
+                    "imagen": row[2],
+                    "descripcion": row[3],
+                    "categoria": row[4],
+                    "numero_jugadas": row[5],
+                    "icono": row[6]
+                })
+            return juegos
+        except Exception as e:
+            print("Error en obtener_mas_jugados:", e)
+            return []
+        finally:
+            cursor.close()
+            con.close()
+            
+            
+            
+            
+    @staticmethod
+    def obtener_todos(mysql):
+        con = mysql.connect()
+        cursor = con.cursor()
+        try:
+            cursor.execute("""
+                SELECT * FROM juegos
+            """)
+            
+            rows=cursor.fetchall()
+            juegos = []
+            for juego in rows:
+                juego_dict = Juego(
+                    juego[0], juego[1], juego[2], juego[3], juego[4], juego[5], juego[6], juego[7], juego[8]
+                ).to_dict()
+
+                juegos.append(juego_dict)
+
+            return juegos
+        except Exception as e:
+            print("Error en :", e)
+            return []
+        finally:
+            cursor.close()
+            con.close()
+
+    @staticmethod
+    def bloquear_juego(mysql, juego_id, bloquear):
+        con = mysql.connect()
+        cursor = con.cursor()
+        try:
+            cursor.execute("UPDATE juegos SET bloqueado = %s WHERE id = %s", (bloquear, juego_id))
+            con.commit()
+            cursor.close()
+        except Exception as e:
+            print("Error en obtener_mas_jugados:", e)
+            return []
         finally:
             cursor.close()
             con.close()
