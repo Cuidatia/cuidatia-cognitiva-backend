@@ -2,7 +2,7 @@ from entities.ActividadUsuario import Actividad
 class ModelActividadUsuario:
 
     @classmethod
-    def registrar_evento(cls, mysql, usuario_id, tipo_evento, descripcion): #, usuario_correo
+    def registrar_actividad(cls, mysql, usuario_id, tipo_evento, descripcion): #, usuario_correo
         con = mysql.connect()
         cursor = con.cursor()
         try:
@@ -27,7 +27,7 @@ class ModelActividadUsuario:
             return {"mensaje": "Actividad registrada"}
         
         except Exception as e:
-            print("Error en registrar_evento:", e)
+            print("Error en registrar_actividad:", e)
             return {"error": str(e)}
         finally:
             cursor.close()
