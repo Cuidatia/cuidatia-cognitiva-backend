@@ -112,6 +112,46 @@ class ModelUsuarios:
             con.close()
     
     @staticmethod
+    def eliminar_usuario(mysql, usuario_id):
+        try:
+            con = mysql.connect()
+            cursor = con.cursor()
+
+            # Eliminar usuario
+            cursor.execute("DELETE FROM usuarios WHERE id = %s", (usuario_id,))
+            con.commit()
+
+            eliminado = cursor.rowcount > 0  # True si eliminó algo
+
+            cursor.close()
+            con.close()
+            return eliminado
+
+        except Exception as e:
+            print("Error al eliminar usuario:", e)
+            return False
+    
+    @staticmethod
+    def desactivar_usuario(mysql, activo, usuario_id):
+        try:
+            con = mysql.connect()
+            cursor = con.cursor()
+
+            # Desactivar usuario
+            cursor.execute("UPDATE usuarios SET activo = %s WHERE id = %s", (activo, usuario_id,))
+            con.commit()
+
+            desactivado = cursor.rowcount > 0  # True si eliminó algo
+
+            cursor.close()
+            con.close()
+            return desactivado
+
+        except Exception as e:
+            print("Error al desactivar usuario:", e)
+            return False
+    
+    @staticmethod
     def obtener_todos(mysql):
         con = mysql.connect()
         cursor = con.cursor()
@@ -157,13 +197,17 @@ class ModelUsuarios:
 
             cursor.execute("""SELECT COUNT(*) FROM actividad_usuario""")
             total_actividades = cursor.fetchone()[0]
+            
+            cursor.execute("""SELECT SUM(tiempo_segundos) AS total_segundos FROM actividad_usuario""")
+            total_tiempo = cursor.fetchone()[0]
 
             return ({
                 "usuarios_activos": usuarios_activos,
                 "total_usuarios": total_usuarios,
                 "total_juegos": total_juegos,
                 "total_incidencias": total_incidencias,
-                "total_actividades": total_actividades
+                "total_actividades": total_actividades,
+                "total_tiempo": total_tiempo
             })
 
         except Exception as e:
@@ -226,10 +270,30 @@ class ModelUsuarios:
                     GROUP BY groupfecha ORDER BY groupfecha ASC
                 """)
                 actividades_raw = cursor.fetchall()
+                
+            # --- Tiempo por día
+            if desde:
+                cursor.execute("""
+                    SELECT DATE(fecha) as groupfecha, SUM(tiempo_segundos) 
+                    FROM actividad_usuario 
+                    WHERE fecha >= %s
+                    GROUP BY groupfecha ORDER BY groupfecha ASC
+                """, (desde,))
+                tiempo_raw = cursor.fetchall()
+            else:
+                cursor.execute("""
+                    SELECT DATE(fecha) as fechas, SUM(tiempo_segundos) 
+                    FROM actividad_usuario 
+                    GROUP BY fechas ORDER BY fechas ASC
+                """)
+                tiempo_raw = cursor.fetchall()
 
             # --- Rellenar días vacíos
             def rellenar_dias(desde, hasta, datos_raw):
-                fechas_existentes = {str(r[0]): r[1] for r in datos_raw}
+                fechas_existentes = {
+                    str(r[0]): (r[1] if r[1] is not None else 0)  # evita None en SUM
+                    for r in datos_raw
+                }
                 return [
                     {"fecha": str((desde + timedelta(days=i))), "cantidad": fechas_existentes.get(str(desde + timedelta(days=i)), 0)}
                     for i in range((hasta - desde).days + 1)
@@ -239,15 +303,18 @@ class ModelUsuarios:
                 hasta = hoy
                 registros_por_dia = rellenar_dias(desde, hasta, registros_raw)
                 actividades_por_dia = rellenar_dias(desde, hasta, actividades_raw)
+                tiempo_por_dia = rellenar_dias(desde, hasta, tiempo_raw)
             else:
                 registros_por_dia = [{"fecha": str(r[0]), "cantidad": r[1]} for r in registros_raw]
                 actividades_por_dia = [{"fecha": str(r[0]), "cantidad": r[1]} for r in actividades_raw]
+                tiempo_por_dia = [{"fecha": str(r[0]), "cantidad": (r[1] if r[1] is not None else 0)} for r in tiempo_raw]
 
 
             return ({
                 "actividades_por_dia": actividades_por_dia,
                 "juegos_populares": [{"nombre": j[0], "jugadas": j[1]} for j in juegos_populares],
-                "registros_por_dia": registros_por_dia
+                "registros_por_dia": registros_por_dia,
+                "tiempo_por_dia": tiempo_por_dia
             })
 
         except Exception as e:

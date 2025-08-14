@@ -373,15 +373,13 @@ def registrar_evento():
         data = request.get_json()
         tipo_evento = data.get("tipo_evento")
         descripcion = data.get("descripcion")
-        #usuario_correo = data.get("usuario_correo")
         user = data.get("user")
-        
-        print(data)
-
+        tiempo = data.get("tiempo")
+    
         if not tipo_evento or not descripcion or not user: #or not usuario_correo
             return jsonify({"error": "Faltan campos requeridos"}), 400
 
-        resultado = ModelActividadUsuario.registrar_evento(mysql, user, tipo_evento, descripcion) #, usuario_correo
+        resultado = ModelActividadUsuario.registrar_evento(mysql, user, tipo_evento, descripcion, tiempo) #, usuario_correo
 
         if "error" in resultado:
             return jsonify(resultado), 400
@@ -457,6 +455,47 @@ def obtener_todos_los_juegos():
     except Exception as e:
         print("Error al obtener juegos:", e)
         return jsonify({'error': 'Error interno'}), 500
+
+@app.route('/admin/eliminar', methods=['POST'])
+def eliminar_usuario():
+    try:
+
+        data = request.get_json()
+        usuario_id = data.get("id")
+
+        if not usuario_id:
+            return jsonify({"error": "Falta el ID del usuario"}), 400
+
+        eliminado = ModelUsuarios.eliminar_usuario(mysql, usuario_id)
+
+        if eliminado:
+            return jsonify({"message": "Usuario eliminado correctamente", "id": usuario_id}), 200
+        else:
+            return jsonify({"error": "Usuario no encontrado o no eliminado"}), 404
+
+    except Exception as e:
+        print("Error en /admin/eliminar:", e)
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/admin/desactivar', methods=['POST'])
+def desactivar_usuario():
+    try:
+
+        data = request.get_json()
+        usuario_id = data.get("id")
+        activo = data.get("activo")
+
+        nuevo_estado = not activo
+        eliminado = ModelUsuarios.desactivar_usuario(mysql, nuevo_estado, usuario_id)
+
+        if eliminado:
+            return jsonify({"message": "Usuario desactivado correctamente", "id": usuario_id}), 200
+        else:
+            return jsonify({"error": "Usuario no encontrado o no desactivado"}), 404
+
+    except Exception as e:
+        print("Error en /admin/desactivar:", e)
+        return jsonify({"error": str(e)}), 500    
     
 @app.route('/admin/bloquear-juego', methods=['POST'])
 def bloquear_juego():
