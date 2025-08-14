@@ -10,6 +10,8 @@ from models.ModelNivelesJuego import ModelNivelesJuego
 from models.ModelNivelesJuegoUsuario import ModelNivelJuegoUsuario
 from models.ModelActividadUsuario import ModelActividadUsuario
 from models.ModelIncidencias import ModelIncidencias
+from models.ModelEventos import ModelEvento
+from models.ModelEventosUsuario import ModelEventosUsuario
 from flaskext.mysql import MySQL
 from werkzeug.utils import secure_filename
 import os
@@ -367,8 +369,8 @@ def obtener_todas():
         print(e)
         return jsonify({"error": str(e)}), 500
     
-@app.route("/admin/registrar-evento", methods=["POST"])
-def registrar_evento():
+@app.route("/admin/registrar-actividad", methods=["POST"])
+def registrar_actividad():
     try:
         data = request.get_json()
         tipo_evento = data.get("tipo_evento")
@@ -379,7 +381,7 @@ def registrar_evento():
         if not tipo_evento or not descripcion or not user: #or not usuario_correo
             return jsonify({"error": "Faltan campos requeridos"}), 400
 
-        resultado = ModelActividadUsuario.registrar_evento(mysql, user, tipo_evento, descripcion, tiempo) #, usuario_correo
+        resultado = ModelActividadUsuario.registrar_actividad(mysql, user, tipo_evento, descripcion, tiempo) #, usuario_correo
 
         if "error" in resultado:
             return jsonify(resultado), 400
@@ -387,7 +389,7 @@ def registrar_evento():
         return jsonify(resultado), 200
 
     except Exception as e:
-        print("Error en /admin/registrar-evento:", e)
+        print("Error en /admin/registrar-actividad:", e)
         return jsonify({"error": str(e)}), 500
 
 @app.route('/mas-jugados', methods=['GET'])
@@ -532,6 +534,173 @@ def bloquear_juego():
 #     except Exception as e:
 #         print("Error al crear invitación:", e)
 #         return jsonify({'error': 'Error interno'}), 500
+
+# BACKEND DE EVENTOS
+@app.route('/eventos', methods=['GET'])
+def obtener_todos_eventos():
+    try:
+        eventos = ModelEvento.get_all_eventos(mysql)
+        return jsonify({'eventos': eventos}), 200
+    except Exception as e:
+        print("Error al obtener eventos:", e)
+        return jsonify({'error': 'Error al obtener eventos'}), 500
+
+@app.route('/eventos/<int:evento_id>', methods=['GET'])
+def obtener_evento(evento_id):
+    try:
+        evento = ModelEvento.get_evento(mysql, evento_id)
+        return jsonify(evento), 200
+    except Exception as e:
+        print("Error al obtener el evento:", e)
+        return jsonify({"error": "Error al obtener el evento"}), 500
+
+@app.route('/eventos', methods=['POST'])
+def registrar_evento():
+    data = request.get_json()
+    nombre = data.get('nombre')
+    descripcion = data.get('descripcion')
+    categoria = data.get('categoria')
+    plazas_ocupadas = data.get('plazas_ocupadas')
+    plazas_totales = data.get('plazas_totales')
+    imagen = data.get('imagen')
+    ubicacion = data.get('ubicacion')
+    localidad = data.get('localidad')
+    fecha_evento = data.get('fecha_evento')
+    activo = data.get('activo')
+
+    try:        
+        evento_id = ModelEvento.registrar_evento(mysql, nombre, descripcion, categoria, plazas_ocupadas, plazas_totales, imagen, ubicacion, localidad, fecha_evento, activo)
+        return jsonify({"evento": {"id": evento_id}}), 201
+    except Exception as e:
+        print("Error al crear el evento:", e)
+        return jsonify({"error": "Error al crear el evento"}), 500
+
+@app.route('/eventos/<int:evento_id>', methods=['PUT'])
+def modificar_evento(evento_id):
+    evento = request.get_json()
+    nombre = evento.get('nombre')
+    descripcion = evento.get('descripcion')
+    categoria = evento.get('categoria')
+    plazas_ocupadas = evento.get('plazas_ocupadas', 0)
+    plazas_totales = evento.get('plazas_totales')
+    imagen = evento.get('imagen', '')
+    ubicacion = evento.get('ubicacion')
+    localidad = evento.get('localidad')
+    fecha_evento = evento.get('fecha_evento')
+    activo = evento.get('activo', 1)
+
+    try:        
+        success = ModelEvento.modificar_evento(mysql, evento_id, nombre, descripcion, categoria, plazas_ocupadas, plazas_totales, imagen, ubicacion, localidad, fecha_evento, activo)
+        if success:
+            evento_actualizado = ModelEvento.get_evento(mysql, evento_id)
+            return jsonify({"success": True, "evento": evento_actualizado}), 200
+        else:
+            return jsonify({"success": False, "error": "No se pudo modificar el evento"}), 400
+    except Exception as e:
+        print("Error al crear el evento:", e)
+        return jsonify({"error": "Error al crear el evento"}), 500
+
+@app.route('/eventos/<int:evento_id>', methods=['DELETE'])
+def eliminar_evento(evento_id):
+
+    try:
+        ModelEvento.eliminar_evento(mysql, evento_id)
+        return jsonify({'message': 'Evento eliminado correctamente'}), 200
+    except Exception as e:
+        return jsonify({"error": "Error al eliminar evento"}), 500
+
+# BACKEND DE EVENTOS USUARIO
+@app.route('/inscripciones', methods=['GET'])
+def obtener_todas_inscripciones():
+    try:
+        inscripciones = ModelEventosUsuario.get_all_eventos_usuario(mysql)
+        return jsonify({'inscripciones': inscripciones}), 200
+    except Exception as e:
+        print("Error al obtener inscripciones:", e)
+        return jsonify({'error': 'Error al obtener inscripciones'}), 500
+    
+@app.route('/inscripciones', methods=['GET'])
+def obtener_inscripcion_usuario_evento():
+    usuario_id = request.args.get('usuario_id')
+    evento_id = request.args.get('evento_id')
+
+    if not usuario_id or not evento_id:
+        return jsonify({'error': 'Faltan parámetros usuario_id o evento_id'}), 400
+
+    try:
+        inscripcion = ModelEventosUsuario.get_inscripcion_usuario_evento(mysql, usuario_id, evento_id)
+        if inscripcion is None:
+            return jsonify([]), 200
+        return jsonify([inscripcion]), 200
+    except Exception as e:
+        print("Error al obtener inscripción:", e)
+        return jsonify({'error': 'Error al obtener inscripción'}), 500
+
+@app.route('/eventos/<int:evento_id>/inscripciones', methods=['GET'])
+def obtener_inscripciones_evento(evento_id):
+
+    if not evento_id:
+        return jsonify({'error': 'Falta evento_id'}), 400
+
+    try:
+        inscripciones = ModelEventosUsuario.obtener_inscritos_evento(mysql, evento_id)
+        return jsonify(inscripciones), 200
+    except Exception as e:
+        print("Error al obtener usuarios inscritos:", e)
+        return jsonify({"error": "Error al obtener usuarios inscritos"}), 500
+
+@app.route('/usuarios/<int:usuario_id>/inscripciones', methods=['GET'])
+def obtener_inscripciones_usuario(usuario_id):
+
+    if not usuario_id:
+        return jsonify({'error': 'Falta usuario_id'}), 400
+
+    try:
+        inscripciones = ModelEventosUsuario.obtener_eventos_usuario(mysql, usuario_id)
+        return jsonify(inscripciones), 200
+    except Exception as e:
+        print("Error al obtener eventos inscritos:", e)
+        return jsonify({"error": "Error al obtener eventos inscritos"}), 500
+
+@app.route('/inscripciones', methods=['POST'])
+def inscribir_usuario():
+    data = request.get_json()
+    evento_id = data.get('evento_id')
+    usuario_id = data.get('usuario_id')
+    participacion = data.get('participacion')
+
+    try:        
+        evento = ModelEventosUsuario.registrar_inscripcion(mysql, usuario_id, evento_id,  participacion)
+        return jsonify(evento), 201
+    except Exception as e:
+        print("Error al crear la inscripcion:", e)
+        return jsonify({"error": "Error al crear la inscripcion"}), 500
+
+@app.route('/inscripciones/<int:inscripcion_id>/participacion', methods=['PUT'])
+def participacion_usuario(inscripcion_id):
+    data = request.get_json()
+    inscripcion = data.get('mostrarInscripcion')
+    participacion = inscripcion['participacion']
+
+    try:        
+        evento = ModelEventosUsuario.marcar_participacion(mysql, inscripcion_id, participacion)
+        return jsonify(evento), 201
+    except Exception as e:
+        print("Error al marcar la participacion:", e)
+        return jsonify({"error": "Error al marcar la participacion"}), 500
+
+@app.route('/inscripciones', methods=['DELETE'])
+def anular_inscripcion():
+    data = request.get_json()
+    usuario_id = data.get('usuario_id')
+    evento_id = data.get('evento_id')
+
+    try:
+        ModelEventosUsuario.eliminar_inscripcion(mysql,usuario_id, evento_id)
+        return jsonify({'message': 'Inscripcion anulada correctamente'}), 200
+    except Exception as e:
+        return jsonify({"error": "Error al anular la inscripcion"}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5002)
