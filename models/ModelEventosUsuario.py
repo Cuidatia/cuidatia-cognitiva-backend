@@ -7,20 +7,35 @@ class ModelEventosUsuario:
         cursor = con.cursor()
         try:
             cursor.execute("""
-                SELECT * FROM eventos_usuario
-                ORDER BY fecha_inscripcion DESC
+                SELECT 
+                    eu.id,
+                    eu.usuario_id,
+                    u.nombre AS nombre_usuario,
+                    u.correo,
+                    eu.evento_id,
+                    e.nombre AS nombre_evento,
+                    eu.participacion,
+                    eu.fecha_inscripcion
+                FROM eventos_usuario eu
+                JOIN usuarios u ON eu.usuario_id = u.id
+                JOIN eventos e ON eu.evento_id = e.id
+                ORDER BY eu.fecha_inscripcion DESC
             """)
             rows = cursor.fetchall()
             eventos_usuario = []
             for row in rows:
-                fecha_formateada = row[4].strftime('%Y-%m-%d %H:%M') if row[4] else None
+                fecha_formateada = row[7].strftime('%Y-%m-%d %H:%M') if row[7] else None
                 registro = {
-                "id": row[0],
-                "usuario_id": row[1],
-                "evento_id": row[2],
-                "participacion": row[3],
-                "fecha_inscripcion": fecha_formateada,
-                } 
+                    "id":row[0],
+                    "usuario_id": row[1],
+                    "nombre_usuario": row[2],
+                    "correo": row[3],
+                    "evento_id": row[4],
+                    "nombre_evento": row[5],
+                    "participacion": row[6],
+                    "fecha_inscripcion": fecha_formateada,
+
+                }
                 eventos_usuario.append(registro)
             return eventos_usuario
         except Exception as e:
