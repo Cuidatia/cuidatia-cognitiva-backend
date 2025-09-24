@@ -35,7 +35,7 @@ app.config["MYSQL_DATABASE_PASSWORD"]	= "mipassword"
 app.config["MYSQL_DATABASE_DB"] = "cuidatiacogdb"
 
 mysql.init_app(app)
-CORS(app, supports_credentials=True, origins="http://localhost:3000")
+CORS(app, supports_credentials=True, origins=["https://main.d1sgc8jpuk3ajh.amplifyapp.com", "http://localhost:3000"])
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 AVATAR_FOLDER = os.path.join(BASE_DIR, 'public', 'avatars')
