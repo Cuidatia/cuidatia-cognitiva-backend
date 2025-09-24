@@ -3,23 +3,39 @@ from entities.Juegos import Juego
 
 class ModelJuegos:
     @classmethod
-    def get_all_juegos(cls, mysql):
-        con= mysql.connect()
+    def get_all_juegos(cls, mysql, usuario_id=None):
+        con = mysql.connect()
         cursor = con.cursor()
-        
         try:
-            cursor.execute(""" 
+            if usuario_id:  
+                # Usuario logueado → filtra global + individual
+                cursor.execute("""
+                    SELECT j.*
+                    FROM juegos j
+                    WHERE j.bloqueado = 0
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM juegos_bloqueados jb
+                        WHERE jb.juego_id = j.id
+                        AND jb.usuario_id = %s
+                        AND jb.activo = 1
+                    )
+                """, (usuario_id,))
+            else:
+                # Usuario anónimo → solo filtra global
+                cursor.execute("""
+                    SELECT *
+                    FROM juegos
+                    WHERE bloqueado = 0
+                """)
 
-                select * from juegos WHERE bloqueado = 0;
+            rows = cursor.fetchall()
 
-            """)
-
-            rows=cursor.fetchall()
-            
             juegos = []
             for juego in rows:
                 juego_dict = Juego(
-                    juego[0], juego[1], juego[2], juego[3], juego[4], juego[5], juego[6], juego[7], juego[8]
+                    juego[0], juego[1], juego[2], juego[3], juego[4],
+                    juego[5], juego[6], juego[7], juego[8]
                 ).to_dict()
 
                 # Obtener puntuación promedio y número de valoraciones
@@ -31,7 +47,8 @@ class ModelJuegos:
 
             return juegos
         except Exception as e:
-            return e
+            print("Error en get_all_juegos:", e)
+            return []
         finally:
             cursor.close()
             con.close()
@@ -67,7 +84,7 @@ class ModelJuegos:
                 WHERE juego_id = %s
             """, (juego_id,))
             valoracion = cursor.fetchone()
-            print(valoracion)
+            # print(valoracion)
 
             return {
                 "puntuacion_promedia": float(valoracion[0]) if valoracion[0] else 0,

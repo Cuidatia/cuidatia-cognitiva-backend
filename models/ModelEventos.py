@@ -42,6 +42,7 @@ class ModelEvento:
     @classmethod
     def registrar_evento(cls,mysql,nombre,descripcion,categoria,plazas_ocupadas,plazas_totales,imagen,
                          ubicacion,localidad,fecha_evento,activo):
+        
         conn = mysql.connect()
         cursor = conn.cursor()
         try:

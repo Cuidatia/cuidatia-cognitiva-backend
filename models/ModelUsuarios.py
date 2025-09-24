@@ -1,6 +1,7 @@
 from flask import request, jsonify
 from entities.Usuarios import Usuario, hash_password, check_password
 from datetime import datetime, timedelta
+import uuid 
 
 class ModelUsuarios:
     @classmethod
@@ -18,14 +19,128 @@ class ModelUsuarios:
             return str(e)
 
     @classmethod
+    def crear_usuario_desde_invitacion(cls, mysql, invitacion_id):
+        """Aceptar una invitación y crear un usuario nuevo"""
+        con = mysql.connect()
+        cursor = con.cursor()
+        try:
+            cursor.execute("""
+                SELECT id, correo_invitado, rol_destino, estado, usuario_id
+                FROM invitaciones
+                WHERE id=%s
+            """, (invitacion_id,))
+            invitacion = cursor.fetchone()
+
+            if not invitacion:
+                return {"error": "Invitación no encontrada"}
+
+            invit_id, correo, rol_destino, estado, paciente_id = invitacion
+
+            if estado != "pendiente":
+                return {"error": "La invitación ya fue procesada"}
+
+            rol = 3 if rol_destino == "familiar" else 4
+            password = uuid.uuid4().hex[:8]  # contraseña aleatoria
+            hashed_pw = hash_password(password)
+
+            cursor.execute("""
+                INSERT INTO usuarios (nombre, correo, fecha_nacimiento, contrasena_hash, id_rol, activo, debe_actualizar_datos)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, ("Usuario Invitado", correo, "2000-01-01", hashed_pw, rol, 1, 1))
+            con.commit()
+
+            nuevo_usuario_id = cursor.lastrowid  # ⚡️ IMPORTANTE
+
+            cursor.execute("""
+                UPDATE invitaciones SET estado='aceptada' WHERE id=%s
+            """, (invitacion_id,))
+            con.commit()
+
+            return {
+                "message": "Usuario creado con éxito",
+                "correo": correo,
+                "password": password,
+                "nuevo_usuario_id": nuevo_usuario_id,  # <- NECESARIO para crear vínculo
+                "paciente_id": paciente_id,            # <- viene de invitaciones.usuario_id
+                "rol_destino": rol_destino             # <- familiar o medico
+            }
+
+        except Exception as e:
+            print("Error en crear_usuario_desde_invitacion:", e)
+            return {"error": str(e)}
+        finally:
+            cursor.close()
+            con.close()
+
+    @classmethod
+    def actualizar_datos(cls, mysql, user_id, nombre, fecha_nacimiento, biografia, password):
+        con = mysql.connect()
+        cursor = con.cursor()
+        try:
+            hashed_pw = hash_password(password)
+            cursor.execute("""
+                UPDATE usuarios
+                SET nombre=%s, fecha_nacimiento=%s, biografia=%s, contrasena_hash=%s, debe_actualizar_datos=0
+                WHERE id=%s
+            """, (nombre, fecha_nacimiento, biografia, hashed_pw, user_id))
+            con.commit()
+            return {"message": "Datos actualizados correctamente"}
+        except Exception as e:
+            con.rollback()
+            raise e
+        finally:
+            cursor.close()
+            con.close()
+
+    @classmethod
+    def reset_password(cls, mysql, token, nueva_password):
+        con = mysql.connect()
+        cursor = con.cursor()
+        try:
+            # Validar token y fecha de expiración
+            cursor.execute("""
+                SELECT id, reset_token_expira 
+                FROM usuarios 
+                WHERE reset_token = %s
+            """, (token,))
+            user = cursor.fetchone()
+
+            if not user:
+                return {"error": "Token inválido"}
+
+            user_id, expira = user
+
+            if expira < datetime.now():
+                return {"error": "El token ha expirado"}
+
+            # ✅ Hashear nueva contraseña con bcrypt
+            hashed = hash_password(nueva_password)
+
+            # Actualizar contraseña y limpiar token
+            cursor.execute("""
+                UPDATE usuarios 
+                SET contrasena_hash = %s, reset_token = NULL, reset_token_expira = NULL 
+                WHERE id = %s
+            """, (hashed, user_id))
+            con.commit()
+
+            return {"message": "Contraseña actualizada correctamente"}
+        except Exception as e:
+            print("Error en reset_password:", e)
+            return {"error": str(e)}
+        finally:
+            cursor.close()
+            con.close()
+
+    @classmethod
     def registrar_usuario(cls, mysql, data):
         con = mysql.connect()
         cursor = con.cursor()
         try:
             hashed_pw = hash_password(data['password'])
             cursor.execute("""
-                INSERT INTO usuarios (nombre, correo, fecha_nacimiento, contrasena_hash)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO usuarios (nombre, correo, fecha_nacimiento, contrasena_hash, debe_actualizar_datos)
+                VALUES (%s, %s, %s, %s, 0)
             """, (data['nombre'], data['email'], data['fechaNacimiento'], hashed_pw))
             con.commit()
             return {"mensaje": "Usuario registrado correctamente"}
@@ -43,16 +158,23 @@ class ModelUsuarios:
                 FROM usuarios WHERE correo = %s
             """, (data['correo'],))
             row = cursor.fetchone()
-            if row:
-                user = Usuario(*row)
-                if check_password(data['password'], row[4]):
-                    return user.to_dict()
-                else:
-                    return {"error": "Contraseña incorrecta"}
-            else:
-                return {"error": "Usuario no encontrado"}
+            if not row:
+                return {"error": "Usuario no encontrado", "code": "not_found"}
+            # row[4] = contrasena_hash   |  row[10] = activo  (ajusta índices si varían)
+            if not check_password(data['password'], row[4]):
+                return {"error": "Contraseña incorrecta", "code": "wrong_password"}
+
+            # Si la contraseña es correcta, validamos estado activo
+            if row[10] == 0:
+                return {"error": "Cuenta deshabilitada", "code": "disabled"}
+
+            user = Usuario(*row)
+            return user.to_dict()
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": str(e), "code": "server_error"}
+        finally:
+            cursor.close()
+            con.close()
         
     @classmethod
     def update_usuario(cls, mysql, data):
@@ -165,7 +287,7 @@ class ModelUsuarios:
             for usuario in rows:
                 usuarios_dict = Usuario(
                     usuario[0], usuario[1], usuario[2], usuario[3].strftime('%Y-%m-%d'), usuario[4], usuario[5].strftime('%Y-%m-%d'),
-                    usuario[6], usuario[7], usuario[8], usuario[9], usuario[10], usuario[11]).to_dict()
+                    usuario[6], usuario[7], usuario[8], usuario[9], usuario[10], usuario[11], usuario[12], usuario[13], usuario[14]).to_dict()
                 
                 usuarios.append(usuarios_dict)
                 
@@ -219,7 +341,147 @@ class ModelUsuarios:
         finally:
             cursor.close()
             con.close() 
-            
+    
+    @staticmethod
+    def obtener_reporte_usuario(mysql, usuario_id):
+        con = mysql.connect()
+        cursor = con.cursor()
+        try:
+            # --- Datos básicos del usuario ---
+            cursor.execute("""
+                SELECT 
+                    id, nombre, correo, fecha_nacimiento, fecha_registro, 
+                    id_rol, activo, experiencia
+                FROM usuarios 
+                WHERE id = %s;
+            """, (usuario_id,))
+            row = cursor.fetchone()
+
+            if not row:
+                return None
+
+            keys = [desc[0] for desc in cursor.description]
+            usuario = dict(zip(keys, row))
+
+            # Calcular nivel y progreso desde la experiencia
+            exp_total = usuario.get("experiencia", 0)
+            nivel_calculado, progreso = calcular_nivel_y_progreso(exp_total)
+
+            usuario["nivel_calculado"] = nivel_calculado
+            usuario["progreso_nivel"] = progreso
+
+            # --- Totales ---
+            cursor.execute("""
+                SELECT COUNT(*) 
+                FROM actividad_usuario
+                WHERE usuario_id = %s
+                AND tipo_evento = 'Jugar';
+            """, (usuario_id,))
+            numero_jugadas = cursor.fetchone()[0]
+
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM actividad_usuario
+                WHERE usuario_id = %s
+                AND tipo_evento = 'Completar un nivel';
+            """, (usuario_id,))
+            numero_completados = cursor.fetchone()[0]
+
+            cursor.execute("""
+                SELECT COALESCE(SUM(tiempo_segundos), 0)
+                FROM actividad_usuario
+                WHERE usuario_id = %s
+                AND tipo_evento IN ('Jugar', 'Completar un nivel');
+            """, (usuario_id,))
+            numero_tiempo = cursor.fetchone()[0]
+
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM actividad_usuario
+                WHERE usuario_id = %s
+                AND tipo_evento = 'Iniciar sesión';
+            """, (usuario_id,))
+            numero_inicios = cursor.fetchone()[0]
+
+            # --- Nivel alcanzado por juego ---
+            cursor.execute("""
+                SELECT nv.usuario_id, nv.nivel_id, j.nombre FROM niveles_juego_usuario nv
+                INNER JOIN juegos j ON nv.juego_id = j.id WHERE nv.usuario_id = %s;
+            """, (usuario_id,))
+            niveles_alcanzados = cursor.fetchall()
+            niveles_alcanzados = [
+                {
+                    "usuario_id": na[0],
+                    "nivel_id": na[1],
+                    "nombre": na[2]
+                }
+                for na in niveles_alcanzados
+            ]
+
+            # --- Reseñas del usuario ---
+            cursor.execute("""
+                SELECT v.id, v.juego_id, v.puntuacion, v.comentario, v.fecha, v.es_destacada, v.editada, j.nombre
+                FROM valoraciones v INNER JOIN juegos j ON v.juego_id = j.id
+                WHERE v.usuario_id = %s
+                ORDER BY v.fecha DESC;
+            """, (usuario_id,))
+            reseñas = cursor.fetchall()
+            reseñas = [
+                {
+                    "id": r[0],
+                    "juego_id": r[1],
+                    "puntuacion": r[2],
+                    "comentario": r[3],
+                    "fecha": str(r[4]),
+                    "es_destacada": r[5],
+                    "editada": r[6],
+                    "nombre": r[7]
+                }
+                for r in reseñas
+            ]
+
+            # --- Últimas 50 actividades ---
+            cursor.execute("""
+                SELECT *
+                FROM actividad_usuario
+                WHERE usuario_id = %s
+                ORDER BY fecha DESC
+                LIMIT 50;
+            """, (usuario_id,))
+            actividades = cursor.fetchall()
+            actividades = [
+                {
+                    "id": a[0],
+                    "usuario_id": a[1],
+                    "tipo_evento": a[2],
+                    "descripcion": a[3],
+                    "fecha": str(a[4]),
+                    "tiempo_segundos": a[5]
+                }
+                for a in actividades
+            ]
+
+            return {
+                **usuario,  # desestructura todo lo de usuarios
+                "numero_jugadas": numero_jugadas,
+                "numero_completados": numero_completados,
+                "numero_tiempo": numero_tiempo,
+                "numero_inicios": numero_inicios,
+                "niveles_alcanzados": niveles_alcanzados,
+                "valoraciones": reseñas,
+                "actividades": actividades
+            }
+
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            return {"error": str(e)}
+
+        finally:
+            cursor.close()
+            con.close()
+
+    
     @staticmethod
     def obtener_graficas(mysql, filtro='7d'):
         con = mysql.connect()

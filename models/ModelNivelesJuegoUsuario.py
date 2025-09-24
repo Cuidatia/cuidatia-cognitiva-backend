@@ -111,7 +111,6 @@ class ModelNivelJuegoUsuario:
         
     @classmethod
     def aumentar_nivel(cls, mysql, juego_id, usuario_id, nivel_id):
-        print(juego_id, usuario_id, nivel_id)
         con= mysql.connect()
         cursor = con.cursor()
         

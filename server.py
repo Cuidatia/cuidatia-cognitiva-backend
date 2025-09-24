@@ -12,9 +12,15 @@ from models.ModelActividadUsuario import ModelActividadUsuario
 from models.ModelIncidencias import ModelIncidencias
 from models.ModelEventos import ModelEvento
 from models.ModelEventosUsuario import ModelEventosUsuario
+from models.ModelSeguimiento import ModelSeguimiento
+from models.ModelInvitaciones import ModelInvitacion
+from models.ModelBloqueos import ModelBloqueos
+from models.ModelVinculosUsuarios import ModelVinculoUsuario
 from flaskext.mysql import MySQL
 from werkzeug.utils import secure_filename
 import os
+import uuid 
+from datetime import datetime, timedelta
 
 mysql = MySQL()
 app = Flask(__name__)
@@ -33,8 +39,10 @@ CORS(app, supports_credentials=True, origins="http://localhost:3000")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 AVATAR_FOLDER = os.path.join(BASE_DIR, 'public', 'avatars')
+IMAGE_FOLDER = os.path.join(BASE_DIR, 'public', 'events')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 app.config['AVATAR_FOLDER'] = AVATAR_FOLDER
+app.config['IMAGE_FOLDER'] = IMAGE_FOLDER
 
 # BACKEND DEL USUARIOS
 
@@ -46,6 +54,10 @@ def allowed_file(filename):
 @app.route('/avatars/<path:filename>')
 def serve_avatar(filename):
     return send_from_directory(AVATAR_FOLDER, filename)
+
+@app.route('/events/<path:filename>')
+def serve_image(filename):
+    return send_from_directory(IMAGE_FOLDER, filename)
 
 @app.route('/subirAvatar', methods=['POST'])
 def subir_avatar():
@@ -63,7 +75,7 @@ def subir_avatar():
     
     try:
         file.save(file_path)
-        avatar_url = f"/avatars/{filename}"
+        avatar_url = f"avatars/{filename}"
         
         con = mysql.connect()
         cursor = con.cursor()
@@ -136,12 +148,14 @@ def registro():
 def login():
     data = request.get_json()
     resultado = ModelUsuarios.login_usuario(mysql, data)
-    # ✅ Si contiene error, devolver 401
+    
     if "error" in resultado:
-        return jsonify(resultado), 401  # <- MUY IMPORTANTE
+        status = 403 if resultado.get("code") == "disabled" else 401
+        return jsonify(resultado), status
 
-    # ✅ Si todo bien, devolver 200 OK
+    
     return jsonify(resultado), 200
+
 ## MODIFICAR DATOS USAURIOS PERFIL
 
 @app.route("/modificar", methods=["POST"])
@@ -172,11 +186,11 @@ def obtener_usuario():
 @app.route("/juegos")
 def juegos():
     try:
-        juegos = ModelJuegos.get_all_juegos(mysql)
-        
+        usuario_id = request.args.get("usuario_id", type=int)
+        juegos = ModelJuegos.get_all_juegos(mysql, usuario_id)
         return jsonify({'juegos': juegos})
     except Exception as e:
-        return jsonify({'error': e}) 
+        return jsonify({'error': str(e)})
 
 @app.route('/usuarios/<int:usuario_id>/calcular_exp', methods=['POST'])
 def calcular_experiencia():
@@ -327,10 +341,10 @@ usuarios_admin = Blueprint('usuarios_admin', __name__)
 def get_usuarios():
     try:
         usuarios = ModelUsuarios.obtener_todos(mysql)
-        return jsonify({"usuarios": usuarios}), 200
+        return jsonify(usuarios), 200  # 👈 devuelve array directo
     except Exception as e:
         print(e)
-        return jsonify({"error": str(e)}), 500
+        return jsonify([]), 500
 
 @app.route('/admin/estadisticas', methods=['GET'])
 def get_estadisticas():
@@ -347,6 +361,15 @@ def get_graficas():
         filtro = request.args.get('filtro', '7d')
         graficas = ModelUsuarios.obtener_graficas(mysql, filtro)
         return jsonify({"graficas": graficas}), 200
+    except Exception as e:
+        print(e)
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/reseñas/destacadas', methods=['GET'])
+def get_reseñas_destacadas():
+    try:
+        reseñas = ModelValoracion.obtener_reseñas_destacadas(mysql, limite=10)
+        return jsonify({"reseñas": reseñas}), 200
     except Exception as e:
         print(e)
         return jsonify({"error": str(e)}), 500
@@ -435,6 +458,15 @@ def eliminar_valoracion():
         print("Error al eliminar valoración:", e)
         return jsonify({"error": "Error al eliminar valoración"}), 500
 
+@app.route('/admin/usuario/<int:id>', methods=['GET'])
+def get_usuario_reporte(id):
+    try:
+        data = ModelUsuarios.obtener_reporte_usuario(mysql, id)
+        return jsonify(data), 200
+    except Exception as e:
+        print("Error en get_usuario_reporte:", e)
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/usuario/actividad', methods=['GET'])
 def obtener_actividad_usuario():
     usuario_id = request.args.get('usuario_id')  # Lo pasas en la URL, ej: /usuario/actividad?usuario_id=123
@@ -515,25 +547,156 @@ def bloquear_juego():
         print("Error al bloquear juego:", e)
         return jsonify({'error': 'Error interno'}), 500
 
+# Toggle resuelta
+@app.route('/incidencias/<int:id>/toggle', methods=['PUT'])
+def toggle_incidencia(id):
+    con = mysql.connect()
+    cursor = con.cursor()
+    try:
+        cursor.execute("SELECT resuelta FROM incidencias WHERE id = %s", (id,))
+        current = cursor.fetchone()
+        if not current:
+            return jsonify({"error": "Incidencia no encontrada"}), 404
 
-# @app.route('/admin/crear-invitacion', methods=['POST'])
-# def crear_invitacion():
-#     data = request.get_json()
-#     rol = data.get('rol')
+        nuevo_estado = 0 if current[0] else 1
+        cursor.execute("UPDATE incidencias SET resuelta = %s WHERE id = %s", (nuevo_estado, id))
+        con.commit()
+        return jsonify({"id": id, "resuelta": nuevo_estado})
+    finally:
+        cursor.close()
+        con.close()
 
-#     if rol not in [3, 4]:
-#         return jsonify({'error': 'Rol no permitido'}), 400
+# Eliminar incidencia
+@app.route('/incidencias/<int:id>', methods=['DELETE'])
+def delete_incidencia(id):
+    con = mysql.connect()
+    cursor = con.cursor()
+    try:
+        cursor.execute("DELETE FROM incidencias WHERE id = %s", (id,))
+        con.commit()
+        return jsonify({"message": "Incidencia eliminada", "id": id})
+    finally:
+        cursor.close()
+        con.close()
+        
+# Invitar familiar desde el perfil de un usuario normal
+@app.route("/invitar-familiar", methods=["POST"])
+def invitar_familiar():
+    data = request.get_json()
+    correo = data.get("correo")
+    usuario_id = data.get("usuario_id")
 
-#     try:
-#         import secrets
-#         token = secrets.token_urlsafe(16)
+    if not correo or not usuario_id:
+        return jsonify({"error": "Datos incompletos"}), 400
 
-#         # Guarda el token con el rol asociado (en tabla invitaciones)
-#         resultado = ModelInvitaciones.guardar_invitacion(mysql, token, rol)
-#         return jsonify({'token': token}), 200
-#     except Exception as e:
-#         print("Error al crear invitación:", e)
-#         return jsonify({'error': 'Error interno'}), 500
+    try:
+        ModelInvitacion.invitar_usuario(mysql, usuario_id, correo, "familiar")
+        return jsonify({"message": "Invitación a familiar registrada correctamente"}), 200
+    except Exception as e:
+        print("Error al invitar familiar:", e)
+        return jsonify({"error": "Error al registrar invitación"}), 500
+
+# Invitar médico desde el panel del administrador
+@app.route("/admin/invitar-medico", methods=["POST"])
+def invitar_medico():
+    data = request.get_json()
+    correo = data.get("correo")
+
+    if not correo:
+        return jsonify({"error": "Correo requerido"}), 400
+
+    try:
+        ModelInvitacion.invitar_usuario(mysql, None, correo, "medico")
+        return jsonify({"message": "Invitación a médico registrada correctamente"}), 200
+    except Exception as e:
+        print("Error al invitar médico:", e)
+        return jsonify({"error": "Error al registrar invitación"}), 500
+
+# Crear usuario a partir de una invitación (acción del admin)
+@app.route("/admin/crear-usuario-invitado", methods=["POST"])
+def crear_usuario_invitado():
+    data = request.get_json()
+    invitacion_id = data.get("invitacion_id")
+
+    if not invitacion_id:
+        return jsonify({"error": "ID de invitación requerido"}), 400
+
+    try:
+        resultado = ModelUsuarios.crear_usuario_desde_invitacion(mysql, invitacion_id)
+        if "error" in resultado:
+            return jsonify(resultado), 400
+        return jsonify(resultado), 200
+    except Exception as e:
+        print("Error al crear usuario desde invitación:", e)
+        return jsonify({"error": "Error interno del servidor"}), 500
+
+# ==========================
+# INVITACIONES (ADMIN)
+# ==========================
+
+# 📌 Listar invitaciones
+@app.route("/admin/invitaciones", methods=["GET"])
+def listar_invitaciones():
+    try:
+        resultado = ModelInvitacion.listar_invitaciones(mysql)
+        return jsonify({"invitaciones": resultado}), 200
+    except Exception as e:
+        print("Error en /admin/invitaciones:", e)
+        return jsonify({"error": str(e)}), 500
+
+
+# 📌 Rechazar invitación
+@app.route("/admin/rechazar-invitacion", methods=["POST"])
+def rechazar_invitacion():
+    data = request.get_json()
+    invitacion_id = data.get("invitacion_id")
+
+    if not invitacion_id:
+        return jsonify({"error": "Falta el ID de la invitación"}), 400
+
+    try:
+        resultado = ModelInvitacion.rechazar_invitacion(mysql, invitacion_id)
+        if "error" in resultado:
+            return jsonify(resultado), 400
+        return jsonify({"message": "Invitación rechazada correctamente"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/admin/buscar-usuarios", methods=["GET"])
+def buscar_usuarios():
+    nombre = request.args.get("nombre", "")
+    con = mysql.connect()
+    cursor = con.cursor()
+    try:
+        cursor.execute("""
+            SELECT id, nombre, correo 
+            FROM usuarios 
+            WHERE id_rol = 1 AND nombre LIKE %s
+        """, (f"%{nombre}%",))
+        rows = cursor.fetchall()
+        usuarios = [{"id": r[0], "nombre": r[1], "correo": r[2]} for r in rows]
+        return jsonify({"usuarios": usuarios}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        con.close()
+
+@app.route("/admin/crear-invitacion", methods=["POST"])
+def crear_invitacion_admin():
+    data = request.get_json()
+    correo = data.get("correo")
+    rol_destino = data.get("rol_destino")
+    usuario_id = data.get("usuario_id")
+
+    if not correo or not rol_destino or not usuario_id:
+        return jsonify({"error": "Faltan datos"}), 400
+
+    try:
+        resultado = ModelInvitacion.invitar_usuario(mysql, usuario_id, correo, rol_destino)
+        return jsonify(resultado), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # BACKEND DE EVENTOS
 @app.route('/eventos', methods=['GET'])
@@ -556,21 +719,44 @@ def obtener_evento(evento_id):
 
 @app.route('/eventos', methods=['POST'])
 def registrar_evento():
-    data = request.get_json()
-    nombre = data.get('nombre')
-    descripcion = data.get('descripcion')
-    categoria = data.get('categoria')
-    plazas_ocupadas = data.get('plazas_ocupadas')
-    plazas_totales = data.get('plazas_totales')
-    imagen = data.get('imagen')
-    ubicacion = data.get('ubicacion')
-    localidad = data.get('localidad')
-    fecha_evento = data.get('fecha_evento')
-    activo = data.get('activo')
+    try:
+        # Datos de texto desde FormData
+        nombre = request.form.get('nombre')
+        descripcion = request.form.get('descripcion')
+        categoria = request.form.get('categoria')
+        plazas_totales = request.form.get('plazas_totales')
+        ubicacion = request.form.get('ubicacion')
+        localidad = request.form.get('localidad')
+        fecha_evento = request.form.get('fecha_evento')
+        activo = request.form.get('activo', 0)
+        plazas_ocupadas = 0  # por defecto
 
-    try:        
-        evento_id = ModelEvento.registrar_evento(mysql, nombre, descripcion, categoria, plazas_ocupadas, plazas_totales, imagen, ubicacion, localidad, fecha_evento, activo)
+        # Archivo
+        if 'imagen' not in request.files:
+            return jsonify({'error': 'Falta imagen'}), 400
+
+        file = request.files['imagen']
+
+        if file.filename == '' or not allowed_file(file.filename):
+            return jsonify({'error': 'Archivo inválido'}), 400
+
+        # Guardar la imagen
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['IMAGE_FOLDER'], filename)
+        file.save(filepath)
+
+        # Ruta relativa que guardarás en la BD
+        imagen = f"events/{filename}"
+
+        # Insertar en la BD
+        evento_id = ModelEvento.registrar_evento(
+            mysql, nombre, descripcion, categoria,
+            plazas_ocupadas, plazas_totales, imagen,
+            ubicacion, localidad, fecha_evento, activo
+        )
+
         return jsonify({"evento": {"id": evento_id}}), 201
+
     except Exception as e:
         print("Error al crear el evento:", e)
         return jsonify({"error": "Error al crear el evento"}), 500
@@ -701,6 +887,269 @@ def anular_inscripcion():
     except Exception as e:
         return jsonify({"error": "Error al anular la inscripcion"}), 500
 
+@app.route("/usuarios/actualizar-datos", methods=["POST"])
+def actualizar_datos_usuario():
+    data = request.get_json()
+
+    user_id = data.get("user_id")
+    nombre = data.get("nombre")
+    fecha_nacimiento = data.get("fecha_nacimiento")
+    biografia = data.get("biografia")
+    nueva_password = data.get("password")
+    
+    if not user_id:
+        return jsonify({"error": "Usuario no autenticado"}), 401
+
+    if not nombre or not fecha_nacimiento or not nueva_password:
+        return jsonify({"error": "Faltan campos obligatorios"}), 400
+
+    try:
+        resultado = ModelUsuarios.actualizar_datos(mysql, user_id, nombre, fecha_nacimiento, biografia, nueva_password)
+        return jsonify(resultado), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# --- Panel de seguimiento: lista de pacientes vinculados a un supervisor (rol 3/4)
+@app.route('/seguimiento/pacientes', methods=['GET'])
+def get_pacientes_vinculados():
+    supervisor_id = request.args.get('supervisor_id', type=int)
+    if not supervisor_id:
+        return jsonify({"error": "Falta supervisor_id"}), 400
+    try:
+        pacientes = ModelSeguimiento.obtener_pacientes_vinculados(mysql, supervisor_id)
+        return jsonify({"pacientes": pacientes}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# --- Resumen detallado de un paciente (para tarjetas y modal)
+@app.route('/seguimiento/paciente/<int:usuario_id>/resumen', methods=['GET'])
+def get_resumen_paciente(usuario_id):
+    try:
+        resumen = ModelSeguimiento.obtener_resumen_paciente(mysql, usuario_id)
+        return jsonify(resumen), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# --- Series (tiempo, actividad, registros) para gráficas con filtro
+@app.route('/seguimiento/paciente/<int:usuario_id>/series', methods=['GET'])
+def get_series_paciente(usuario_id):
+    filtro = request.args.get('filtro', '7d')  # 7d | 30d | global
+    try:
+        series = ModelSeguimiento.obtener_series_paciente(mysql, usuario_id, filtro)
+        return jsonify(series), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ====== Endpoints ADMIN para gestionar vínculos ======
+
+# # Crear vínculo (ADMIN)
+# @app.route('/admin/vinculos', methods=['POST'])
+# def crear_vinculo():
+#     data = request.get_json()
+#     paciente_id = data.get('paciente_id')
+#     supervisor_id = data.get('supervisor_id')
+#     tipo_vinculo = data.get('tipo_vinculo')  # 'familiar' | 'medico'
+    
+#     print(data)
+
+#     if not all([paciente_id, supervisor_id, tipo_vinculo]):
+#         return jsonify({"error": "Faltan datos"}), 400
+
+#     try:
+#         ok = ModelSeguimiento.crear_vinculo(mysql, paciente_id, supervisor_id, tipo_vinculo)
+#         if ok:
+#             return jsonify({"message": "Vínculo creado"}), 201
+#         return jsonify({"error": "No se pudo crear vínculo (¿duplicado?)"}), 409
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+
+
+# Eliminar vínculo (ADMIN)
+@app.route('/admin/vinculos', methods=['DELETE'])
+def eliminar_vinculo():
+    data = request.get_json()
+    paciente_id = data.get('paciente_id')
+    supervisor_id = data.get('supervisor_id')
+
+    if not all([paciente_id, supervisor_id]):
+        return jsonify({"error": "Faltan datos"}), 400
+
+    try:
+        ok = ModelSeguimiento.eliminar_vinculo(mysql, paciente_id, supervisor_id)
+        if ok:
+            return jsonify({"message": "Vínculo eliminado"}), 200
+        return jsonify({"error": "Vínculo no encontrado"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/forgot-password", methods=["POST"])
+def forgot_password():
+    data = request.get_json()
+    correo = data.get("correo")
+
+    con = mysql.connect()
+    cursor = con.cursor()
+    cursor.execute("SELECT id FROM usuarios WHERE correo = %s", (correo,))
+    user = cursor.fetchone()
+
+    if not user:
+        return jsonify({"error": "Correo no registrado"}), 404
+
+    # ✅ Generar token único con uuid
+    token = str(uuid.uuid4())
+    expira = datetime.now() + timedelta(hours=1)
+
+    cursor.execute("""
+        UPDATE usuarios 
+        SET reset_token = %s, reset_token_expira = %s 
+        WHERE correo = %s
+    """, (token, expira, correo))
+    con.commit()
+
+    enlace = f"http://localhost:3000/resetear-contrasena?token={token}"
+    print("🔗 Enlace de recuperación:", enlace)
+
+    return jsonify({"message": "Se ha enviado un enlace de recuperación a tu correo (simulado)."}), 200
+
+@app.route("/reset-password", methods=["POST"])
+def reset_password():
+    data = request.get_json()
+    token = data.get("token")
+    nueva_password = data.get("password")
+
+    if not token or not nueva_password:
+        return jsonify({"error": "Token y contraseña son obligatorios"}), 400
+
+    try:
+        result = ModelUsuarios.reset_password(mysql, token, nueva_password)
+        if "error" in result:
+            return jsonify(result), 400
+        return jsonify(result), 200
+    except Exception as e:
+        print("Error en reset-password:", e)
+        return jsonify({"error": "Error interno"}), 500
+
+# === PER-USUARIO: listar bloqueos activos con búsqueda y paginación
+@app.route('/admin/juegos-bloqueados', methods=['GET'])
+def listar_bloqueos():
+    search = request.args.get('q')
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 10))
+    offset = (page - 1) * limit
+
+    try:
+        data = ModelBloqueos.listar(mysql, search, limit, offset)
+        total = ModelBloqueos.contar(mysql, search)
+        return jsonify({"data": data, "page": page, "limit": limit, "total": total}), 200
+    except Exception as e:
+        print("Error en listar_bloqueos:", e)
+        return jsonify({"error": "Error interno"}), 500
+
+
+# === PER-USUARIO: crear/reativar bloqueo
+@app.route('/admin/juegos-bloqueados', methods=['POST'])
+def crear_bloqueo():
+    body = request.get_json() or {}
+    usuario_id = body.get('usuario_id')
+    juego_id   = body.get('juego_id')
+    motivo     = body.get('motivo')
+
+    if not usuario_id or not juego_id:
+        return jsonify({"error": "usuario_id y juego_id son requeridos"}), 400
+
+    try:
+        creado_por = session.get('usuario_id')  # opcional: qué admin lo hizo
+        res = ModelBloqueos.crear_bloqueo(mysql, int(usuario_id), int(juego_id), motivo, creado_por)
+
+        if not res.get("ok") and res.get("reason") == "already_active":
+            return jsonify({"ok": False, "message": "Ya estaba bloqueado", "id": res.get("id")}), 200
+
+        return jsonify(res), 200
+    except Exception as e:
+        print("Error en crear_bloqueo:", e)
+        return jsonify({"error": "Error interno"}), 500
+
+
+# === PER-USUARIO: desbloquear
+@app.route('/admin/juegos-bloqueados/<int:bloqueo_id>/desbloquear', methods=['PATCH'])
+def desbloquear_bloqueo(bloqueo_id):
+    try:
+        ok = ModelBloqueos.desbloquear(mysql, bloqueo_id)
+        if not ok:
+            return jsonify({"error": "No se encontró el bloqueo o ya estaba inactivo"}), 404
+        return jsonify({"ok": True}), 200
+    except Exception as e:
+        print("Error en desbloquear_bloqueo:", e)
+        return jsonify({"error": "Error interno"}), 500
+
+@app.route('/admin/vinculos', methods=['GET'])
+def listar_vinculos():
+    try:
+        vinculos = ModelVinculoUsuario.listar(mysql)
+        return jsonify(vinculos), 200
+    except Exception as e:
+        print("Error en listar_vinculos:", e)
+        return jsonify({"error": str(e)}), 500
+
+# --- Listar supervisores (roles 3 = familiar, 4 = medico)
+@app.route("/admin/vinculos/supervisores", methods=["GET"])
+def vinculos_supervisores():
+    try:
+        data = ModelVinculoUsuario.obtener_supervisores(mysql)  # [{id, nombre, email, id_rol}]
+        return jsonify(data), 200
+    except Exception as e:
+        print("Error en vinculos_supervisores:", e)
+        return jsonify({"error": "Error interno"}), 500
+
+# --- Listar pacientes (rol 1)
+@app.route("/admin/vinculos/pacientes", methods=["GET"])
+def vinculos_pacientes():
+    try:
+        data = ModelVinculoUsuario.obtener_pacientes(mysql)  # [{id, nombre, email}]
+        return jsonify(data), 200
+    except Exception as e:
+        print("Error en vinculos_pacientes:", e)
+        return jsonify({"error": "Error interno"}), 500
+
+# --- Crear vínculos en lote
+@app.route("/admin/vinculos", methods=["POST"])
+def crear_vinculos():
+    body = request.get_json() or {}
+    supervisor_id = body.get("supervisor_id")
+    paciente_ids = body.get("paciente_ids")  # array de ints
+
+    if not supervisor_id or not isinstance(paciente_ids, list) or len(paciente_ids) == 0:
+        return jsonify({"error": "supervisor_id y paciente_ids[] son requeridos"}), 400
+
+    try:
+        res = ModelVinculoUsuario.crear_vinculos_bulk(mysql, int(supervisor_id), [int(x) for x in paciente_ids])
+        return jsonify(res), 200
+    except Exception as e:
+        print("Error en crear_vinculos:", e)
+        return jsonify({"error": "Error interno"}), 500
+
+# === APOYO PARA SELECTS DEL PANEL ===
+@app.route('/admin/usuarios/select', methods=['GET'])
+def admin_listar_usuarios():
+    try:
+        usuarios = ModelBloqueos.obtener_usuarios(mysql)
+        return jsonify(usuarios), 200
+    except Exception as e:
+        print("Error en admin_listar_usuarios:", e)
+        return jsonify({"error": "Error interno"}), 500
+
+
+@app.route('/admin/juegos', methods=['GET'])
+def admin_listar_juegos():
+    try:
+        juegos = ModelBloqueos.obtener_juegos(mysql)
+        return jsonify(juegos), 200
+    except Exception as e:
+        print("Error en admin_listar_juegos:", e)
+        return jsonify({"error": "Error interno"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5002)

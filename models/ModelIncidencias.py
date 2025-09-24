@@ -19,6 +19,36 @@ class ModelIncidencias:
         finally:
             cursor.close()
             con.close()
+         
+    @staticmethod
+    def toggle_resuelta(mysql, incidencia_id):
+        con = mysql.connect()
+        cursor = con.cursor()
+        try:
+            cursor.execute("SELECT resuelta FROM incidencias WHERE id = %s", (incidencia_id,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+
+            nuevo_estado = 0 if row[0] else 1
+            cursor.execute("UPDATE incidencias SET resuelta = %s WHERE id = %s", (nuevo_estado, incidencia_id))
+            con.commit()
+            return {"id": incidencia_id, "resuelta": nuevo_estado}
+        finally:
+            cursor.close()
+            con.close()
+
+    @staticmethod
+    def eliminar_incidencia(mysql, incidencia_id):
+        con = mysql.connect()
+        cursor = con.cursor()
+        try:
+            cursor.execute("DELETE FROM incidencias WHERE id = %s", (incidencia_id,))
+            con.commit()
+            return {"id": incidencia_id}
+        finally:
+            cursor.close()
+            con.close()
             
     @classmethod
     def obtener_todas(cls, mysql):

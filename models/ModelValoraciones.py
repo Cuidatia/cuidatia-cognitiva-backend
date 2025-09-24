@@ -59,3 +59,31 @@ class ModelValoracion:
             return {"mensaje": "Valoración actualizada correctamente"}
         except Exception as e:
             return {"error": str(e)}
+        
+    @staticmethod
+    def obtener_reseñas_destacadas(mysql, limite=10):
+        con = mysql.connect()
+        cursor = con.cursor()
+        try:
+            cursor.execute("""
+                SELECT v.id, v.puntuacion, v.comentario, v.fecha, 
+                       u.nombre AS usuario_nombre, u.avatar_url AS usuario_avatar, 
+                       j.nombre AS juego_nombre
+                FROM valoraciones v
+                JOIN usuarios u ON v.usuario_id = u.id
+                JOIN juegos j ON v.juego_id = j.id
+                WHERE v.puntuacion >= 4
+                ORDER BY v.fecha DESC
+                LIMIT %s;
+            """, (limite,))
+            rows = cursor.fetchall()
+
+            keys = [desc[0] for desc in cursor.description]
+            reseñas = [dict(zip(keys, row)) for row in rows]
+            return reseñas
+        except Exception as e:
+            print("Error al obtener reseñas destacadas:", e)
+            return []
+        finally:
+            cursor.close()
+            con.close()
