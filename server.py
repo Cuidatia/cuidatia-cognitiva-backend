@@ -37,7 +37,7 @@ app.config["MYSQL_DATABASE_DB"] = "cuidatiacogdb"
 mysql.init_app(app)
 CORS(app, supports_credentials=True, origins=[
          "http://localhost:3000",   # solo sirve en tu PC
-         "https://main.d1sgc8jpuk3ajh.amplifyapp.com"  # producción real
+         "https://cuidatiacognitiva.adiper.es/"  # producción real
      ])
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
