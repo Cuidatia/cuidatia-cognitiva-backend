@@ -21,6 +21,8 @@ from werkzeug.utils import secure_filename
 import os
 import uuid 
 from datetime import datetime, timedelta
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from models.ModelChat import ModelChat
 
 mysql = MySQL()
 app = Flask(__name__)
@@ -47,7 +49,55 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 app.config['AVATAR_FOLDER'] = AVATAR_FOLDER
 app.config['IMAGE_FOLDER'] = IMAGE_FOLDER
 
+# === SocketIO ===
+socketio = SocketIO(
+    app,
+    cors_allowed_origins=[
+        "http://localhost:3000",
+        "https://cuidatiacognitiva.adiper.es"
+    ],
+    async_mode="eventlet"  # usa eventlet
+)
+
+# Canal global (sin salas por ahora)
+@socketio.on('connect')
+def handle_connect():
+    print("Cliente conectado al chat.")
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print("Cliente desconectado del chat.")
+
+@socketio.on('send_message')
+def handle_send_message(data):
+    usuario_id = data.get('usuario_id')
+    usuario_nombre = data.get('usuario', 'Anónimo')
+    mensaje = data.get('mensaje')
+
+    print(f"📩 Nuevo mensaje de {usuario_nombre}: {mensaje}")
+
+    # Guardar en BD
+    ok = ModelChat.guardar_mensaje(mysql, usuario_id, mensaje)
+
+    if ok:
+        emit('receive_message', {
+            "usuario": usuario_nombre,
+            "usuario_id": usuario_id,
+            "mensaje": mensaje
+        }, broadcast=True)
+    else:
+        emit('error', {"error": "No se pudo guardar el mensaje."})
+
 # BACKEND DEL USUARIOS
+
+@app.route("/chat/mensajes", methods=["GET"])
+def obtener_mensajes_chat():
+    try:
+        mensajes = ModelChat.obtener_mensajes(mysql, limite=20)
+        return jsonify({"mensajes": mensajes}), 200
+    except Exception as e:
+        print("Error en obtener_mensajes_chat:", e)
+        return jsonify({"error": str(e)}), 500
 
 ## SUBIR AVATAR
 
@@ -1155,5 +1205,7 @@ def admin_listar_juegos():
         return jsonify({"error": "Error interno"}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5002)
+    socketio.run(app, debug=True, host='0.0.0.0', port=5002, ssl_context=(
+            "/home/ubuntu/fullchain.pem",
+            "/home/ubuntu/privkey.pem"))
     #app.run(debug=True, host='127.0.0.1', port=5002)
