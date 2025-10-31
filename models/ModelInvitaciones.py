@@ -4,7 +4,7 @@ import uuid
 class ModelInvitacion:
     @classmethod
     def invitar_usuario(cls, mysql, usuario_id, correo, rol_destino):
-        """Insertar invitación (familiar o médico) en la tabla invitaciones"""
+        """Insertar invitación (supervisor o médico) en la tabla invitaciones"""
         token = str(uuid.uuid4())
         con = mysql.connect()
         cursor = con.cursor()

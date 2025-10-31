@@ -38,8 +38,13 @@ class ModelUsuarios:
 
             if estado != "pendiente":
                 return {"error": "La invitación ya fue procesada"}
-
-            rol = 3 if rol_destino == "familiar" else 4
+            
+            if rol_destino == "supervisor":
+                rol = 3
+            elif rol_destino == "medico":
+                rol = 4
+            elif rol_destino == "usuario":
+                rol = 1
             password = uuid.uuid4().hex[:8]  # contraseña aleatoria
             hashed_pw = hash_password(password)
 

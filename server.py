@@ -53,7 +53,7 @@ app.config['IMAGE_FOLDER'] = IMAGE_FOLDER
 socketio = SocketIO(
     app,
     cors_allowed_origins=[
-        "http://localhost:3000",
+        "http://localhost:3000", "http://127.0.0.1:3000",
         "https://cuidatiacognitiva.adiper.es"
     ],
     async_mode="eventlet"  # usa eventlet
@@ -377,7 +377,7 @@ def toggle_favorito():
 @app.route('/juegos/<int:juego_id>/nivel-usuario', methods=['POST'])
 def aumentar_nivel(juego_id):
     data = request.json
-    nivel_id = data.get('nuevo_nivel')
+    nivel_id = data.get('nivel_id')
     usuario_id = data.get('usuario_id')
     juego_id = data.get('juego_id')
 
@@ -385,7 +385,12 @@ def aumentar_nivel(juego_id):
         return jsonify({'error': 'Datos incompletos'}), 400
     
     resultado = ModelNivelJuegoUsuario.aumentar_nivel(mysql, juego_id, usuario_id, nivel_id)
-    return jsonify({'mensaje': 'Nivel actualizado correctamente'}), 200
+    
+    if 'error' in resultado:
+        return jsonify(resultado), 500
+    else:
+        return jsonify({'mensaje': 'Nivel actualizado correctamente'}), 200
+    
 
 
 usuarios_admin = Blueprint('usuarios_admin', __name__)
@@ -1210,4 +1215,5 @@ if __name__ == '__main__':
     key="/home/ubuntu/privkey.pem"
     
     socketio.run(app, debug=True, host='0.0.0.0', port=5002, certfile=cert, keyfile=key)
+    #socketio.run(app, debug=True, host='0.0.0.0', port=5002)
     #app.run(debug=True, host='127.0.0.1', port=5002)
