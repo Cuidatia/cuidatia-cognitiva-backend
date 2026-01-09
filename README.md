@@ -1,10 +1,4 @@
-# [Cuidatia Cognitiva]
-
-![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
-![Flask Version](https://img.shields.io/badge/flask-2.0%2B-green)
-![License](https://img.shields.io/badge/license-MIT-grey)
-
-> Una breve descripción de lo que hace tu aplicación. (Ej: Una API REST para gestionar tareas o un sitio web de comercio electrónico simple).
+# Cuidatia Cognitiva
 
 ## 📋 Tabla de Contenidos
 
