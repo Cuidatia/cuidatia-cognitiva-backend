@@ -1,13 +1,5 @@
 # Cuidatia Cognitiva
 
-## 📋 Tabla de Contenidos
-
-1. [Características](#-características)
-2. [Requisitos Previos](#-requisitos-previos)
-3. [Instalación](#-instalación)
-
-
----
 
 ## 🚀 Instalación
 
