@@ -11,10 +11,7 @@
 1. [Características](#-características)
 2. [Requisitos Previos](#-requisitos-previos)
 3. [Instalación](#-instalación)
-4. [Configuración](#-configuración)
-5. [Ejecución](#-ejecución)
-6. [Estructura del Proyecto](#-estructura-del-proyecto)
-7. [Contribución](#-contribución)
+
 
 ---
 
