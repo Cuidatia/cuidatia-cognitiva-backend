@@ -23,11 +23,14 @@ import uuid
 from datetime import datetime, timedelta
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from models.ModelChat import ModelChat
+from dotenv import load_dotenv
+import requests as http_requests
 
 mysql = MySQL()
 app = Flask(__name__)
 CORS(app)
 bcrypt = Bcrypt()
+load_dotenv()
 
 app.config["MYSQL_DATABASE_HOST"]	= "localhost"
 app.config["MYSQL_DATABASE_PORT"]	= 3306
@@ -35,6 +38,7 @@ app.config["MYSQL_DATABASE_USER"]	= "root"
 app.config["MYSQL_DATABASE_PASSWORD"]	= "mipassword"
 #app.config["MYSQL_DATABASE_PASSWORD"]	= "root"
 app.config["MYSQL_DATABASE_DB"] = "cuidatiacogdb"
+
 
 mysql.init_app(app)
 CORS(app, supports_credentials=True, origins=[
@@ -45,6 +49,9 @@ CORS(app, supports_credentials=True, origins=[
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 AVATAR_FOLDER = os.path.join(BASE_DIR, 'public', 'avatars')
 IMAGE_FOLDER = os.path.join(BASE_DIR, 'public', 'events')
+COGNIFIT_CLIENT_ID = os.getenv("COGNIFIT_CLIENT_ID")
+COGNIFIT_CLIENT_SECRET = os.getenv("COGNIFIT_CLIENT_SECRET")
+COGNIFIT_USER_TOKEN = os.getenv("COGNIFIT_USER_TOKEN")
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 app.config['AVATAR_FOLDER'] = AVATAR_FOLDER
 app.config['IMAGE_FOLDER'] = IMAGE_FOLDER
@@ -56,7 +63,7 @@ socketio = SocketIO(
         "http://localhost:3000", "http://127.0.0.1:3000",
         "https://cuidatiacognitiva.adiper.es"
     ],
-    async_mode="eventlet"  # usa eventlet
+    async_mode="threading"  # usa eventlet
 )
 
 # Canal global (sin salas por ahora)
@@ -1208,6 +1215,29 @@ def admin_listar_juegos():
     except Exception as e:
         print("Error en admin_listar_juegos:", e)
         return jsonify({"error": "Error interno"}), 500
+    
+@app.route('/cognifit/access-token', methods=['GET'])
+def get_cognifit_access_token():
+    try:
+        response = http_requests.post(
+            'https://api.cognifit.com/issue-access-token',
+            json={
+                'client_id': COGNIFIT_CLIENT_ID,
+                'client_secret': COGNIFIT_CLIENT_SECRET,
+                'user_token': COGNIFIT_USER_TOKEN
+            }
+        )
+        data = response.json()
+
+        if response.status_code == 200 and 'access_token' in data:
+            return jsonify({ 'access_token': data['access_token'] }), 200
+        else:
+            print("Error de CogniFit:", data)
+            return jsonify({ 'error': 'No se pudo obtener el access token', 'detalle': data }), 500
+
+    except Exception as e:
+        print("Excepción al llamar a CogniFit:", str(e))
+        return jsonify({ 'error': str(e) }), 500
 
 if __name__ == '__main__':
     

@@ -35,7 +35,7 @@ class ModelJuegos:
             for juego in rows:
                 juego_dict = Juego(
                     juego[0], juego[1], juego[2], juego[3], juego[4],
-                    juego[5], juego[6], juego[7], juego[8]
+                    juego[5], juego[6], juego[7], juego[8], juego[9]
                 ).to_dict()
 
                 # Obtener puntuación promedio y número de valoraciones
@@ -63,7 +63,7 @@ class ModelJuegos:
             row = cursor.fetchone()
 
             if row:
-                juego = Juego(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8])
+                juego = Juego(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9])
                 return juego.to_dict()
             else:
                 return None
@@ -163,7 +163,7 @@ class ModelJuegos:
             juegos = []
             for juego in rows:
                 juego_dict = Juego(
-                    juego[0], juego[1], juego[2], juego[3], juego[4], juego[5], juego[6], juego[7], juego[8]
+                    juego[0], juego[1], juego[2], juego[3], juego[4], juego[5], juego[6], juego[7], juego[8], juego[9]
                 ).to_dict()
 
                 juegos.append(juego_dict)
