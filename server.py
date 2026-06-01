@@ -24,6 +24,7 @@ from datetime import datetime, timedelta
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from models.ModelChat import ModelChat
 import requests as http_requests
+import ssl
 
 mysql = MySQL()
 app = Flask(__name__)
@@ -1237,6 +1238,9 @@ if __name__ == '__main__':
     cert="/home/ubuntu/fullchain.pem"
     key="/home/ubuntu/privkey.pem"
     
+    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ssl_context.load_cert_chain(cert, key)
     #socketio.run(app, debug=True, host='0.0.0.0', port=5002, certfile=cert, keyfile=key, allow_unsafe_werkzeug=True)
-    socketio.run(app, debug=True, host='0.0.0.0', port=5002, allow_unsafe_werkzeug=True)
+    #socketio.run(app, debug=True, host='0.0.0.0', port=5002, allow_unsafe_werkzeug=True)
+    socketio.run(app, debug=False, host='0.0.0.0', port=5002, ssl_context=ssl_context, allow_unsafe_werkzeug=True)
     #app.run(debug=True, host='127.0.0.1', port=5002)
