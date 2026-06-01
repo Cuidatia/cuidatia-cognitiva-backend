@@ -1241,6 +1241,6 @@ if __name__ == '__main__':
     cert="/home/ubuntu/fullchain.pem"
     key="/home/ubuntu/privkey.pem"
     
-    socketio.run(app, debug=True, host='0.0.0.0', port=5002, certfile=cert, keyfile=key)
+    socketio.run(app, debug=True, host='0.0.0.0', port=5002, certfile=cert, keyfile=key, allow_unsafe_werkzeug=True)
     #socketio.run(app, debug=True, host='0.0.0.0', port=5002)
     #app.run(debug=True, host='127.0.0.1', port=5002)
