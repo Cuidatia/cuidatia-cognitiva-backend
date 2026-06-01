@@ -23,14 +23,11 @@ import uuid
 from datetime import datetime, timedelta
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from models.ModelChat import ModelChat
-from dotenv import load_dotenv
 import requests as http_requests
 
 mysql = MySQL()
 app = Flask(__name__)
 CORS(app)
-bcrypt = Bcrypt()
-load_dotenv()
 
 app.config["MYSQL_DATABASE_HOST"]	= "localhost"
 app.config["MYSQL_DATABASE_PORT"]	= 3306
