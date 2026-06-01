@@ -37,10 +37,10 @@ app.config["MYSQL_DATABASE_DB"] = "cuidatiacogdb"
 
 
 mysql.init_app(app)
-CORS(app, supports_credentials=True, origins=[
-         "http://localhost:3000",   # solo sirve en tu PC
-         "https://cuidatiacognitiva.adiper.es"  # producción real
-     ])
+CORS(app, supports_credentials=True, origins=["*"])
+
+#"http://localhost:3000",   # solo sirve en tu PC "https://cuidatiacognitiva.adiper.es"  # producción real
+     
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 AVATAR_FOLDER = os.path.join(BASE_DIR, 'public', 'avatars')
@@ -55,10 +55,7 @@ app.config['IMAGE_FOLDER'] = IMAGE_FOLDER
 # === SocketIO ===
 socketio = SocketIO(
     app,
-    cors_allowed_origins=[
-        "http://localhost:3000", "http://127.0.0.1:3000",
-        "https://cuidatiacognitiva.adiper.es"
-    ],
+    cors_allowed_origins="*",
     async_mode="threading"  # usa eventlet
 )
 
