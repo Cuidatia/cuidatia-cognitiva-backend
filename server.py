@@ -27,7 +27,6 @@ import requests as http_requests
 
 mysql = MySQL()
 app = Flask(__name__)
-CORS(app)
 
 app.config["MYSQL_DATABASE_HOST"]	= "localhost"
 app.config["MYSQL_DATABASE_PORT"]	= 3306
