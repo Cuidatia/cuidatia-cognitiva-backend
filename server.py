@@ -49,9 +49,9 @@ CORS(app, supports_credentials=True, origins=[
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 AVATAR_FOLDER = os.path.join(BASE_DIR, 'public', 'avatars')
 IMAGE_FOLDER = os.path.join(BASE_DIR, 'public', 'events')
-COGNIFIT_CLIENT_ID = os.getenv("COGNIFIT_CLIENT_ID")
-COGNIFIT_CLIENT_SECRET = os.getenv("COGNIFIT_CLIENT_SECRET")
-COGNIFIT_USER_TOKEN = os.getenv("COGNIFIT_USER_TOKEN")
+COGNIFIT_CLIENT_ID = "3f3ef3ef95b485601432890dc61ef669"
+COGNIFIT_CLIENT_SECRET = "e72215e742af8533b0a469d4c1e7f764"
+COGNIFIT_USER_TOKEN = "FZzzvVlAkGYCQIDAgxcQLgc//zKCqDIxXkABTJy+EB3dVEKlLeFDfFU1Licz7uY0Fa8C8luvQUkgKAC2Nb0wFA=="
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 app.config['AVATAR_FOLDER'] = AVATAR_FOLDER
 app.config['IMAGE_FOLDER'] = IMAGE_FOLDER
