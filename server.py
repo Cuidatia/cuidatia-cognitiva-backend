@@ -1232,6 +1232,53 @@ def get_cognifit_access_token():
     except Exception as e:
         print("Excepción al llamar a CogniFit:", str(e))
         return jsonify({ 'error': str(e) }), 500
+    
+@app.route('/cognifit/ultima-partida', methods=['GET'])
+def get_ultima_partida():
+    try:
+        usuario_id = request.args.get('usuario_id')
+        if not usuario_id:
+            return jsonify({'error': 'usuario_id es requerido'}), 400
+
+        response = http_requests.post(
+            'https://api.cognifit.com/get-historical-played-games',
+            json={
+                'client_id': COGNIFIT_CLIENT_ID,
+                'client_secret': COGNIFIT_CLIENT_SECRET,
+                'user_token': COGNIFIT_USER_TOKEN,
+                'initial_value': '0',
+                'total_points': '1'
+            }
+        )
+        data = response.json()
+        if not data.get('success') or not data.get('historicalPlayedGames'):
+            return jsonify({'error': 'No hay partidas'}), 404
+
+        ultima = data['historicalPlayedGames'][0]
+        cognifit_key = ultima.get('key')
+
+        con = mysql.connect()
+        cursor = con.cursor()
+        cursor.execute("SELECT id FROM juegos WHERE cognifit_key = %s", (cognifit_key,))
+        juego = cursor.fetchone()
+        cursor.close()
+        con.close()
+
+        if juego:
+            ModelNivelJuegoUsuario.guardar_partida_cognifit(
+                mysql,
+                usuario_id,
+                juego[0],
+                ultima.get('level'),
+                ultima.get('timePlayed'),
+                ultima.get('time')
+            )
+
+        return jsonify(ultima), 200
+
+    except Exception as e:
+        print("Error en ultima-partida:", str(e))
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     

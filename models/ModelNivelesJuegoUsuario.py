@@ -147,3 +147,39 @@ class ModelNivelJuegoUsuario:
         finally:
             cursor.close()
             con.close()
+
+    @classmethod
+    def guardar_partida_cognifit(cls, mysql, usuario_id, juego_id, level, time_played, time):
+        con = mysql.connect()
+        cursor = con.cursor()
+        try:
+            cursor.execute("""
+                SELECT id FROM niveles_juego_usuario 
+                WHERE juego_id = %s AND usuario_id = %s
+                LIMIT 1
+            """, (juego_id, usuario_id))
+            registro = cursor.fetchone()
+
+            if registro:
+                cursor.execute("""
+                    UPDATE niveles_juego_usuario 
+                    SET nivel_id = %s, tiempo_jugado = %s, ultima_conexion = %s
+                    WHERE id = %s
+                """, (level, time_played, time, registro[0]))
+            else:
+                cursor.execute("""
+                    INSERT INTO niveles_juego_usuario (usuario_id, juego_id, nivel_id, tiempo_jugado, ultima_conexion)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (usuario_id, juego_id, level, time_played, time))
+
+            con.commit()
+            return True
+
+        except Exception as e:
+            print("Error en guardar_partida_cognifit:", str(e))
+            con.rollback()
+            return False
+
+        finally:
+            cursor.close()
+            con.close()
