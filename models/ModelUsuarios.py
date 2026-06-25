@@ -38,14 +38,15 @@ class ModelUsuarios:
 
             if estado != "pendiente":
                 return {"error": "La invitación ya fue procesada"}
-            
+
             if rol_destino == "supervisor":
                 rol = 3
             elif rol_destino == "medico":
                 rol = 4
             elif rol_destino == "usuario":
                 rol = 1
-            password = uuid.uuid4().hex[:8]  # contraseña aleatoria
+
+            password = uuid.uuid4().hex[:8]  # contraseña aleatoria en texto plano
             hashed_pw = hash_password(password)
 
             cursor.execute("""
@@ -54,20 +55,41 @@ class ModelUsuarios:
             """, ("Usuario Invitado", correo, "2000-01-01", hashed_pw, rol, 1, 1))
             con.commit()
 
-            nuevo_usuario_id = cursor.lastrowid  # ⚡️ IMPORTANTE
+            nuevo_usuario_id = cursor.lastrowid
 
             cursor.execute("""
                 UPDATE invitaciones SET estado='aceptada' WHERE id=%s
             """, (invitacion_id,))
             con.commit()
 
+            # Registro automático en CogniFit
+            from models.ModelUsuariosCognifit import ModelUsuariosCognifit
+
+            cognifit_resultado = ModelUsuariosCognifit.registrar_en_cognifit(
+                mysql,
+                usuario_id=nuevo_usuario_id,
+                nombre="Usuario",
+                apellido="Invitado",
+                email=correo,
+                password=password,         # texto plano, antes del hash
+                fecha_nacimiento="2000-01-01",
+                sexo=1,
+                locale="es"
+            )
+
+            cognifit_ok = not (isinstance(cognifit_resultado, dict) and "error" in cognifit_resultado)
+
+            if not cognifit_ok:
+                print(f"⚠️ Usuario {nuevo_usuario_id} creado desde invitación, pero CogniFit falló:", cognifit_resultado)
+
             return {
                 "message": "Usuario creado con éxito",
                 "correo": correo,
                 "password": password,
-                "nuevo_usuario_id": nuevo_usuario_id,  # <- NECESARIO para crear vínculo
-                "paciente_id": paciente_id,            # <- viene de invitaciones.usuario_id
-                "rol_destino": rol_destino             # <- familiar o medico
+                "nuevo_usuario_id": nuevo_usuario_id,
+                "paciente_id": paciente_id,
+                "rol_destino": rol_destino,
+                "cognifit_registrado": cognifit_ok  # info para el admin
             }
 
         except Exception as e:
@@ -148,10 +170,41 @@ class ModelUsuarios:
                 VALUES (%s, %s, %s, %s, 0)
             """, (data['nombre'], data['email'], data['fechaNacimiento'], hashed_pw))
             con.commit()
-            return {"mensaje": "Usuario registrado correctamente"}
+
+            nuevo_usuario_id = cursor.lastrowid
+
+            # Registro automático en CogniFit
+            from models.ModelUsuariosCognifit import ModelUsuariosCognifit
+
+            cognifit_resultado = ModelUsuariosCognifit.registrar_en_cognifit(
+                mysql,
+                usuario_id=nuevo_usuario_id,
+                nombre=data.get('nombre', ''),
+                apellido=data.get('apellido', ''),
+                email=data['email'],
+                password=data['password'],        # texto plano, antes del hash
+                fecha_nacimiento=data['fechaNacimiento'],
+                sexo=data.get('sexo', 1),
+                locale=data.get('locale', 'es')
+            )
+
+            cognifit_ok = not (isinstance(cognifit_resultado, dict) and "error" in cognifit_resultado)
+
+            if not cognifit_ok:
+                print(f"⚠️ Usuario {nuevo_usuario_id} creado, pero CogniFit falló:", cognifit_resultado)
+
+            return {
+                "mensaje": "Usuario registrado correctamente",
+                "usuario_id": nuevo_usuario_id,
+                "cognifit_registrado": cognifit_ok
+            }
+
         except Exception as e:
             print(e)
             return {"error": str(e)}
+        finally:
+            cursor.close()
+            con.close()
 
     @classmethod
     def login_usuario(cls, mysql, data):

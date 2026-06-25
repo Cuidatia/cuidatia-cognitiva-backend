@@ -16,6 +16,7 @@ from models.ModelSeguimiento import ModelSeguimiento
 from models.ModelInvitaciones import ModelInvitacion
 from models.ModelBloqueos import ModelBloqueos
 from models.ModelVinculosUsuarios import ModelVinculoUsuario
+from models.ModelUsuariosCognifit import ModelUsuariosCognifit
 from flaskext.mysql import MySQL
 from werkzeug.utils import secure_filename
 import os
@@ -1213,26 +1214,39 @@ def admin_listar_juegos():
 @app.route('/cognifit/access-token', methods=['GET'])
 def get_cognifit_access_token():
     try:
+        usuario_id = request.args.get('usuario_id')
+        if not usuario_id:
+            return jsonify({'error': 'usuario_id es requerido'}), 400
+
+        # Obtener el user_token del usuario desde la BD
+        registro_cognifit = ModelUsuariosCognifit.obtener_por_usuario_id(mysql, int(usuario_id))
+
+        if registro_cognifit is None:
+            return jsonify({'error': 'Este usuario no tiene cuenta de CogniFit'}), 404
+        if isinstance(registro_cognifit, dict) and "error" in registro_cognifit:
+            return jsonify(registro_cognifit), 500
+
         response = http_requests.post(
             'https://api.cognifit.com/issue-access-token',
             json={
                 'client_id': COGNIFIT_CLIENT_ID,
                 'client_secret': COGNIFIT_CLIENT_SECRET,
-                'user_token': COGNIFIT_USER_TOKEN
+                'user_token': registro_cognifit.cognifit_user_token  # token del usuario concreto
             }
         )
         data = response.json()
 
         if response.status_code == 200 and 'access_token' in data:
-            return jsonify({ 'access_token': data['access_token'] }), 200
+            return jsonify({'access_token': data['access_token']}), 200
         else:
             print("Error de CogniFit:", data)
-            return jsonify({ 'error': 'No se pudo obtener el access token', 'detalle': data }), 500
+            return jsonify({'error': 'No se pudo obtener el access token', 'detalle': data}), 500
 
     except Exception as e:
         print("Excepción al llamar a CogniFit:", str(e))
-        return jsonify({ 'error': str(e) }), 500
-    
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/cognifit/ultima-partida', methods=['GET'])
 def get_ultima_partida():
     try:
@@ -1240,17 +1254,26 @@ def get_ultima_partida():
         if not usuario_id:
             return jsonify({'error': 'usuario_id es requerido'}), 400
 
+        # Obtener el user_token del usuario desde la BD
+        registro_cognifit = ModelUsuariosCognifit.obtener_por_usuario_id(mysql, int(usuario_id))
+
+        if registro_cognifit is None:
+            return jsonify({'error': 'Este usuario no tiene cuenta de CogniFit'}), 404
+        if isinstance(registro_cognifit, dict) and "error" in registro_cognifit:
+            return jsonify(registro_cognifit), 500
+
         response = http_requests.post(
             'https://api.cognifit.com/get-historical-played-games',
             json={
                 'client_id': COGNIFIT_CLIENT_ID,
                 'client_secret': COGNIFIT_CLIENT_SECRET,
-                'user_token': COGNIFIT_USER_TOKEN,
+                'user_token': registro_cognifit.cognifit_user_token,  # token del usuario concreto
                 'initial_value': '0',
                 'total_points': '1'
             }
         )
         data = response.json()
+
         if not data.get('success') or not data.get('historicalPlayedGames'):
             return jsonify({'error': 'No hay partidas'}), 404
 
